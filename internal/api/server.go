@@ -29,7 +29,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/redisqueue"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v8/sdk/access"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers"
-	"github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/openai"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
@@ -197,8 +196,6 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	s.loggerToggle = toggle
 
 	engine.Use(corsMiddleware())
-	engine.Use(s.responseCompressionMiddleware())
-	openai.SetResponsesWebsocketCompressionEnabled(cfg.Codex.WebsocketCompressionEnabled())
 	s.wsAuthEnabled.Store(cfg.WebsocketAuth)
 	s.exampleAPIKeySafeModeActive.Store(s.exampleAPIKeySafeModeRequired(cfg))
 	s.handlers.SetPluginHost(optionState.pluginHost)

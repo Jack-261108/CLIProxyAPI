@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"compress/flate"
 	"context"
 	"errors"
 	"fmt"
@@ -45,14 +44,9 @@ func (e *CodexWebsocketsExecutor) dialCodexWebsocket(ctx context.Context, auth *
 	}
 	closer := newWebsocketConnectionCloser(conn)
 	if conn != nil {
-		enabled := e.cfg == nil || e.cfg.Codex.WebsocketCompressionEnabled()
-		conn.EnableWriteCompression(enabled)
-		if enabled {
-			// DefaultCompression avoids the fast flate tail path; configuration remains an escape hatch.
-			if errSetCompressionLevel := conn.SetCompressionLevel(flate.DefaultCompression); errSetCompressionLevel != nil {
-				log.Errorf("set Codex websocket compression level: %v", errSetCompressionLevel)
-			}
-		}
+		// Avoid gorilla/websocket flate tail validation issues on some upstreams/Go versions.
+		// Negotiating permessage-deflate is fine; we just don't compress outbound messages.
+		conn.EnableWriteCompression(false)
 	}
 	return conn, closer, resp, err
 }
