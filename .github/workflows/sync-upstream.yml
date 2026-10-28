@@ -1,0 +1,114 @@
+name: Sync Upstream
+
+# 定时检查官方 router-for-me/CLIProxyAPI 的最新稳定版本，
+# 合并到本仓库 main 后打同名 tag，由 release.yaml 构建发布。
+# 合并冲突时中止本次同步并创建 issue，不自动发布。
+
+on:
+  schedule:
+    # 每 6 小时的第 17 分（UTC）
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: router-for-me/CLIProxyAPI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 配置 Git 身份
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: 解析上游最新稳定版本
+        id: upstream
+        run: |
+          set -euo pipefail
+          latest="$(
+            git ls-remote --tags --refs "https://github.com/${UPSTREAM_REPO}.git" 'v*' \
+              | awk '{print $2}' \
+              | sed 's#refs/tags/##' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -V \
+              | tail -n 1
+          )"
+          if [[ -z "$latest" ]]; then
+            echo "无法解析上游最新版本" >&2
+            exit 1
+          fi
+          echo "tag=${latest}" >> "$GITHUB_OUTPUT"
+          echo "上游最新稳定版本: ${latest}"
+
+      - name: 判断是否已发布
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" -R "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "已发布 ${TAG}，跳过" >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "待同步 ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 合并上游版本
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags "https://github.com/${UPSTREAM_REPO}.git" \
+            "refs/tags/${TAG}:refs/tags/upstream-${TAG}"
+
+          if git merge --no-edit "upstream-${TAG}"; then
+            echo "合并 ${TAG} 成功" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git merge --abort || true
+          {
+            echo "## 上游 ${TAG} 同步冲突"
+            echo
+            echo "自动合并 \`${TAG}\` 时产生冲突，本次同步已中止，未推送任何改动。"
+            echo
+            echo "常见原因：上游修改了本仓库已移除的下游响应压缩相关文件。"
+            echo
+            echo "处理方式：本地执行 \`git fetch https://github.com/${UPSTREAM_REPO}.git refs/tags/${TAG}:refs/tags/upstream-${TAG}\` 后手动 \`git merge upstream-${TAG}\` 解决冲突并推送，再手动运行本工作流。"
+          } > /tmp/issue-body.md
+          gh issue create -R "${GITHUB_REPOSITORY}" \
+            --title "上游 ${TAG} 自动同步冲突" \
+            --body-file /tmp/issue-body.md
+          exit 1
+
+      - name: 推送 main 并打 tag
+        if: steps.gate.outputs.run == 'true'
+        env:
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git push origin HEAD:main
+          # 本地可能已存在同名的官方 tag，强制指向本仓库的合并结果
+          git tag -f "$TAG" HEAD
+          git push -f origin "refs/tags/${TAG}"
+          echo "已推送 tag ${TAG}" >> "$GITHUB_STEP_SUMMARY"
