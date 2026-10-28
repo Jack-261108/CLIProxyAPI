@@ -25,6 +25,9 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.upstream.outputs.tag }}
+      synced: ${{ steps.gate.outputs.run }}
     steps:
       - name: 检出仓库
         uses: actions/checkout@v7
@@ -112,3 +115,15 @@ jobs:
           git tag -f "$TAG" HEAD
           git push -f origin "refs/tags/${TAG}"
           echo "已推送 tag ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+  # GITHUB_TOKEN 推送的 tag 不会触发新的 workflow 运行，
+  # 因此在同一工作流内直接调用发布流程。
+  release:
+    name: 构建发布
+    needs: sync
+    if: needs.sync.outputs.synced == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yaml
+    with:
+      tag: ${{ needs.sync.outputs.tag }}
