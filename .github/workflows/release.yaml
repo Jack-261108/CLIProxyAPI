@@ -1,7 +1,7 @@
 name: Release
 
-# 由 sync-upstream.yml 推送的同名 tag 触发，构建 linux/amd64 二进制并发布。
-# 资产命名与官方保持一致，便于现有更新脚本直接使用：
+# Triggered by matching tags pushed from sync-upstream.yml, builds linux/amd64 binary and publishes release.
+# Asset naming matches official release convention for direct compatibility with existing update scripts:
 #   CLIProxyAPI_<version>_linux_amd64.tar.gz
 #   checksums.txt
 
@@ -12,13 +12,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '要重新构建发布的 tag（如 v8.0.46）'
+        description: 'Tag to rebuild and publish (e.g. v8.0.46)'
         required: true
         type: string
   workflow_call:
     inputs:
       tag:
-        description: '要构建发布的 tag'
+        description: 'Tag to build and publish'
         required: true
         type: string
 
@@ -77,10 +77,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag || github.ref_name }}
+          UPSTREAM_REPO: router-for-me/CLIProxyAPI
         run: |
           set -euo pipefail
           notes_file="$(mktemp)"
           trap 'rm -f "$notes_file"' EXIT
+
+          upstream_notes=""
+          if upstream_body="$(gh release view "$TAG" -R "$UPSTREAM_REPO" --json body -q 'select(.body != null) | .body' 2>/dev/null)"; then
+            # Strip upstream multi-platform asset notes (this fork only builds linux/amd64)
+            # and remove "What's Changed" / "New Contributors" sections (contain @mentions
+            # that would incorrectly notify upstream contributors on this fork's releases).
+            upstream_notes="$(printf '%s\n' "$upstream_body" \
+              | tr -d '\r' \
+              | sed '/<!-- cliproxyapi-linux-release-assets:start -->/,/<!-- cliproxyapi-linux-release-assets:end -->/d' \
+              | awk '/^## (What'\''s Changed|New Contributors)/{skip=1; next} /^\*\*Full Changelog\*\*/{skip=0} !skip' \
+              | sed '/./,$!d')"
+          fi
 
           previous_tag="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
           {
@@ -90,7 +103,14 @@ jobs:
             echo
             echo "- 平台：linux/amd64（CGO，支持动态库插件）"
             echo "- 资产：\`CLIProxyAPI_${TAG#v}_linux_amd64.tar.gz\`、\`checksums.txt\`"
-            if [[ -n "$previous_tag" ]]; then
+            if [[ -n "$(printf '%s' "$upstream_notes" | tr -d '[:space:]')" ]]; then
+              echo
+              echo "---"
+              echo
+              printf '%s\n' "$upstream_notes"
+            elif [[ -n "$previous_tag" ]]; then
+              echo
+              echo "---"
               echo
               echo "## 变更"
               echo
@@ -103,7 +123,7 @@ jobs:
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/CLIProxyAPI_*.tar.gz dist/checksums.txt --clobber
-            gh release edit "$TAG" --title "$TAG" --notes-file "$notes_file"
+            gh release edit "$TAG" --title "$TAG" --draft=false --notes-file "$notes_file"
           else
             gh release create "$TAG" dist/CLIProxyAPI_*.tar.gz dist/checksums.txt \
               --title "$TAG" --notes-file "$notes_file"
