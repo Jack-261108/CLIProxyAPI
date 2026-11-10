@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
 )
 
@@ -17,7 +16,7 @@ type homeRequestLogClient interface {
 }
 
 var currentHomeRequestLogClient = func() homeRequestLogClient {
-	return home.Current()
+	return nil
 }
 
 type homeRequestLogPayload struct {

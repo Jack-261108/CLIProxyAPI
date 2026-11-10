@@ -17,7 +17,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/buildinfo"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginstore"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v8/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
@@ -57,10 +56,6 @@ type Handler struct {
 	postAuthPersistHook     coreauth.PostAuthHook
 	pluginHost              *pluginhost.Host
 	configReloadHook        func(context.Context, *config.Config)
-	pluginStoreRegistryURL  string
-	pluginStoreHTTPClient   pluginstore.HTTPDoer
-	pluginStoreRateLimiter  *pluginstore.GitHubRateLimiter
-	pluginReleases          pluginReleaseCache
 	siwcOAuthFactory        func(*config.Config) siwcOAuthService
 	siwcCommitMu            sync.Mutex
 	pluginLoginSaveMu       sync.Mutex

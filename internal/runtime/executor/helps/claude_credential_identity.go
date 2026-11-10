@@ -11,7 +11,6 @@ import (
 	"github.com/MoeForge/moego/ojson"
 	"github.com/google/uuid"
 	claudeauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/claude"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -118,12 +117,11 @@ func mergeClaudeSessionMetadata(metadataSets ...map[string]any) map[string]any {
 
 type claudeCredentialDevicePoolKVClient interface {
 	KVGet(context.Context, string) ([]byte, bool, error)
-	KVSet(context.Context, string, []byte, homekv.KVSetOptions) (bool, error)
+	KVSet(context.Context, string, []byte, KVSetOptions) (bool, error)
 }
 
 var currentClaudeCredentialDevicePoolKVClient = func() (claudeCredentialDevicePoolKVClient, bool, error) {
-	client, homeMode, errClient := homekv.CurrentKVClient()
-	return client, homeMode, errClient
+	return nil, false, nil
 }
 
 // EnsureClaudeCredentialDevicePoolRequired initializes a credential pool locally,
@@ -153,7 +151,7 @@ func EnsureClaudeCredentialDevicePoolRequired(ctx context.Context, auth *cliprox
 	if identity == "" {
 		return nil, fmt.Errorf("ensure Claude credential device pool: credential identity is empty")
 	}
-	key := "cpa:claude:credential-device-pool:" + homekv.HashKeyPart(identity)
+	key := "cpa:claude:credential-device-pool:" + util.HashKeyPart(identity)
 	if raw, found, errGet := client.KVGet(ctx, key); errGet != nil {
 		return nil, fmt.Errorf("ensure Claude credential device pool: Home KV get: %w", errGet)
 	} else if found {
@@ -165,7 +163,7 @@ func EnsureClaudeCredentialDevicePoolRequired(ctx context.Context, auth *cliprox
 					if errMarshal != nil {
 						return nil, fmt.Errorf("ensure Claude credential device pool: marshal canonical Home KV value: %w", errMarshal)
 					}
-					written, errSet := client.KVSet(ctx, key, canonicalRaw, homekv.KVSetOptions{XX: true})
+					written, errSet := client.KVSet(ctx, key, canonicalRaw, KVSetOptions{XX: true})
 					if errSet != nil {
 						return nil, fmt.Errorf("ensure Claude credential device pool: canonicalize Home KV value: %w", errSet)
 					}
@@ -191,7 +189,7 @@ func EnsureClaudeCredentialDevicePoolRequired(ctx context.Context, auth *cliprox
 	if errMarshal != nil {
 		return nil, fmt.Errorf("ensure Claude credential device pool: marshal Home KV value: %w", errMarshal)
 	}
-	if _, errSet := client.KVSet(ctx, key, raw, homekv.KVSetOptions{NX: true}); errSet != nil {
+	if _, errSet := client.KVSet(ctx, key, raw, KVSetOptions{NX: true}); errSet != nil {
 		return nil, fmt.Errorf("ensure Claude credential device pool: Home KV set: %w", errSet)
 	}
 	raw, found, errGet := client.KVGet(ctx, key)

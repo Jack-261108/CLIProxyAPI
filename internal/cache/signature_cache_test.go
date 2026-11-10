@@ -4,12 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	log "github.com/sirupsen/logrus"
 	"strings"
 	"testing"
 	"time"
-
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
-	log "github.com/sirupsen/logrus"
 )
 
 const testModelName = "claude-sonnet-4-5"
@@ -44,7 +42,7 @@ func (c *fakeSignatureKVClient) KVGet(_ context.Context, key string) ([]byte, bo
 	return append([]byte(nil), value...), true, nil
 }
 
-func (c *fakeSignatureKVClient) KVSet(_ context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error) {
+func (c *fakeSignatureKVClient) KVSet(_ context.Context, key string, value []byte, opts KVSetOptions) (bool, error) {
 	c.setCount++
 	c.lastSetTTL = opts.EX
 	if c.setErr != nil {

@@ -2,7 +2,6 @@ package cliproxy
 
 import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	log "github.com/sirupsen/logrus"
 )
@@ -15,7 +14,7 @@ func (s *Service) applyKVStoreConfig(cfg *config.Config) {
 		return
 	}
 	s.kvStoreManaged.Store(true)
-	if cfg == nil || cfg.Home.Enabled || home.Current() != nil || cfg.KVStore.Disabled {
+	if cfg == nil || cfg.KVStore.Disabled {
 		if errShutdown := kvstore.ShutdownLocal(); errShutdown != nil {
 			log.Errorf("failed to shutdown local kv store: %v", errShutdown)
 		}

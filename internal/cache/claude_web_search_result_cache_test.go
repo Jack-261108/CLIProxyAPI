@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type fakeClaudeWebSearchResultKVClient struct {
@@ -40,7 +38,7 @@ func (c *fakeClaudeWebSearchResultKVClient) KVGet(_ context.Context, key string)
 	return bytes.Clone(value), true, nil
 }
 
-func (c *fakeClaudeWebSearchResultKVClient) KVSet(_ context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error) {
+func (c *fakeClaudeWebSearchResultKVClient) KVSet(_ context.Context, key string, value []byte, opts KVSetOptions) (bool, error) {
 	c.setCount++
 	c.lastSetTTL = opts.EX
 	if c.setErr != nil {
@@ -184,27 +182,6 @@ func TestClaudeWebSearchResultCachePurgesExpiredBeforeEvictingLiveEntries(t *tes
 	}
 	if _, ok := GetClaudeWebSearchResult("s", "new"); !ok {
 		t.Fatal("new entry missing")
-	}
-}
-
-func TestClaudeWebSearchResultCacheHomeModeDoesNotUseLocalCache(t *testing.T) {
-	now := time.Unix(1_800_000_000, 0)
-	useClaudeWebSearchResultClock(t, &now)
-
-	CacheClaudeWebSearchResult("session-local", "srvtoolu_local", []byte(`[{"url":"local"}]`), 30*time.Minute, 16)
-
-	homekv.SetCurrent(&homekv.Client{})
-	t.Cleanup(homekv.ClearCurrent)
-
-	if got, ok := GetClaudeWebSearchResult("session-local", "srvtoolu_local", 30*time.Minute); ok {
-		t.Fatalf("GetClaudeWebSearchResult() = %q, true; want Home miss without local fallback", got)
-	}
-
-	CacheClaudeWebSearchResult("session-home", "srvtoolu_home", []byte(`[{"url":"home"}]`), 30*time.Minute, 16)
-	homekv.ClearCurrent()
-
-	if got, ok := GetClaudeWebSearchResult("session-home", "srvtoolu_home", 30*time.Minute); ok {
-		t.Fatalf("local cache = %q, true; want empty after Home write failure", got)
 	}
 }
 

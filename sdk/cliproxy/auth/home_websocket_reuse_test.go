@@ -9,7 +9,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 )
@@ -268,7 +267,7 @@ func TestPickNextViaHomeAbortsBeforeEndingPendingDispatch(t *testing.T) {
 	registry := executionregistry.New()
 	abortSawPending := make(chan bool, 1)
 	dispatcher := &homeAuthTransportErrorDispatcher{
-		err: home.NewAmbiguousDispatchError(errors.New("response connection closed")),
+		err: NewAmbiguousDispatchError(errors.New("response connection closed")),
 		onAbort: func() {
 			cancelledCtx, cancel := context.WithCancel(context.Background())
 			cancel()
@@ -297,7 +296,7 @@ func TestPickNextViaHomeAbortsBeforeEndingPendingDispatch(t *testing.T) {
 }
 
 func TestPickNextViaHomeDoesNotAbortDeterministicDispatchFailure(t *testing.T) {
-	dispatcher := &homeAuthTransportErrorDispatcher{err: home.ErrNotConnected}
+	dispatcher := &homeAuthTransportErrorDispatcher{err: ErrHomeNotConnected}
 	oldCurrentHomeDispatcher := currentHomeDispatcher
 	currentHomeDispatcher = func() homeAuthDispatcher {
 		return dispatcher
@@ -320,7 +319,7 @@ func TestPickNextViaHomeDoesNotAbortDeterministicDispatchFailure(t *testing.T) {
 }
 
 func TestPickNextViaHomeAbortsAmbiguousTransport(t *testing.T) {
-	dispatcher := &homeAuthTransportErrorDispatcher{err: home.NewAmbiguousDispatchError(errors.New("response connection closed"))}
+	dispatcher := &homeAuthTransportErrorDispatcher{err: NewAmbiguousDispatchError(errors.New("response connection closed"))}
 	oldCurrentHomeDispatcher := currentHomeDispatcher
 	currentHomeDispatcher = func() homeAuthDispatcher {
 		return dispatcher

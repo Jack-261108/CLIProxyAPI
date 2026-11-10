@@ -11,7 +11,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
@@ -30,6 +29,30 @@ const (
 	// Executors that do not support this marker may ignore it.
 	CloseAllExecutionSessionsID = "__all_execution_sessions__"
 )
+
+var (
+	ErrHomeAuthNotFound = errors.New("home auth not found")
+	ErrHomeNotConnected = errors.New("home not connected")
+)
+
+type ambiguousDispatchErr struct {
+	error
+}
+
+func (e ambiguousDispatchErr) AmbiguousDispatch() bool { return true }
+
+func NewAmbiguousDispatchError(err error) error {
+	return ambiguousDispatchErr{err}
+}
+
+type ambiguousDispatchError interface {
+	AmbiguousDispatch() bool
+}
+
+func isAmbiguousDispatchError(err error) bool {
+	var target ambiguousDispatchError
+	return errors.As(err, &target) && target.AmbiguousDispatch()
+}
 
 // HomeDispatchBundle is the immutable client and registry pair for one Home lifetime.
 type HomeDispatchBundle struct {
@@ -426,7 +449,7 @@ type homeCredentialPolicyRetryRoundConstraintsDispatcher interface {
 }
 
 var currentHomeDispatcher = func() homeAuthDispatcher {
-	return home.Current()
+	return nil
 }
 
 func setHomeUserAPIKeyOnGinContext(ctx context.Context, apiKey string) {
@@ -1127,11 +1150,11 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
 		return nil, &Error{Code: "home_unavailable", Message: "home dispatcher does not support credential policies", HTTPStatus: http.StatusServiceUnavailable}
 	}
 	if errRPop != nil {
-		if home.IsAmbiguousDispatchError(errRPop) {
+		if isAmbiguousDispatchError(errRPop) {
 			client.AbortAmbiguousDispatch()
 		}
 		pending.End()
-		if errors.Is(errRPop, home.ErrAuthNotFound) {
+		if errors.Is(errRPop, ErrHomeAuthNotFound) {
 			return nil, &Error{Code: "auth_not_found", Message: errRPop.Error(), HTTPStatus: http.StatusServiceUnavailable}
 		}
 		return nil, &Error{Code: "home_unavailable", Message: errRPop.Error(), Retryable: true, HTTPStatus: http.StatusServiceUnavailable}

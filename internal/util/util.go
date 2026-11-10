@@ -5,6 +5,8 @@ package util
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -125,4 +127,10 @@ func WritablePath() string {
 		}
 	}
 	return ""
+}
+
+// HashKeyPart calculates the SHA-256 hash of a string value and returns it as a hex string.
+func HashKeyPart(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/api/middleware"
 	codexlive "github.com/router-for-me/CLIProxyAPI/v8/internal/client/codex/live"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/httpwire"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/safemode"
@@ -335,24 +334,6 @@ func (s *Server) maxRequestBodyBytesMiddleware() gin.HandlerFunc {
 
 func (s *Server) homeHeartbeatMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		cfg := s.getConfig()
-		if s == nil || cfg == nil || !cfg.Home.Enabled {
-			c.Next()
-			return
-		}
-		if c != nil && c.Request != nil {
-			path := c.Request.URL.Path
-			if strings.HasPrefix(path, "/v0/management/") || path == "/v0/management" || strings.HasPrefix(path, "/v8/management/") || path == "/v8/management" || strings.HasPrefix(path, "/v0/resource/plugins/") || path == "/management.html" {
-				c.Next()
-				return
-			}
-		}
-		client := home.Current()
-		if client == nil || !client.HeartbeatOK() {
-			closeUnconsumedRequestOnAbort(c)
-			c.AbortWithStatus(http.StatusServiceUnavailable)
-			return
-		}
 		c.Next()
 	}
 }

@@ -9,7 +9,6 @@ import (
 
 	"github.com/MoeForge/moego/base64"
 	"github.com/MoeForge/moego/ojson"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type fakeXAIReasoningReplayKVClient struct {
@@ -42,7 +41,7 @@ func (c *fakeXAIReasoningReplayKVClient) KVGet(_ context.Context, key string) ([
 	return append([]byte(nil), value...), true, nil
 }
 
-func (c *fakeXAIReasoningReplayKVClient) KVSet(_ context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error) {
+func (c *fakeXAIReasoningReplayKVClient) KVSet(_ context.Context, key string, value []byte, opts KVSetOptions) (bool, error) {
 	c.setCount++
 	c.lastSetTTL = opts.EX
 	if c.setErr != nil {

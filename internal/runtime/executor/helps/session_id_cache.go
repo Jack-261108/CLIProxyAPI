@@ -5,12 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type sessionIDCacheEntry struct {
@@ -31,7 +31,7 @@ type claudeIDKVClient interface {
 }
 
 var currentClaudeIDKVClient = func() (claudeIDKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return nil, false, nil
 }
 
 const (
@@ -144,5 +144,5 @@ func CachedSessionIDRequired(ctx context.Context, apiKey string) (string, error)
 }
 
 func claudeSessionIDKVKey(apiKey string) string {
-	return "cpa:claude:session-id:" + homekv.HashKeyPart(apiKey)
+	return "cpa:claude:session-id:" + util.HashKeyPart(apiKey)
 }

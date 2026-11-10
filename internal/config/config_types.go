@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
-	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginstore"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,12 +30,6 @@ type PluginsConfig struct {
 	Enabled bool `yaml:"enabled" json:"enabled"`
 	// Dir is the plugin discovery directory.
 	Dir string `yaml:"dir" json:"dir"`
-	// StoreSources appends third-party plugin store registries to the built-in official source.
-	StoreSources []string `yaml:"store-sources,omitempty" json:"store-sources,omitempty"`
-	// StoreAuth defines optional auth rules for plugin store registry, metadata, and artifact requests.
-	StoreAuth []sdkpluginstore.AuthConfig `yaml:"store-auth,omitempty" json:"store-auth,omitempty"`
-	// AuthRevision changes when Home-managed plugin credentials change.
-	AuthRevision int64 `yaml:"auth-revision,omitempty" json:"auth-revision,omitempty"`
 	// Configs stores per-plugin instance configuration by plugin ID.
 	Configs map[string]PluginInstanceConfig `yaml:"configs" json:"configs"`
 }

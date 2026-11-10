@@ -10,7 +10,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	internalhome "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 )
@@ -55,7 +54,7 @@ func (d *retryTerminalPriorityHomeDispatcher) RPopAuthWithRetryRoundConstraints(
 	if len(d.finalPayload) > 0 {
 		return append([]byte(nil), d.finalPayload...), nil
 	}
-	return nil, internalhome.ErrAuthNotFound
+	return nil, ErrHomeAuthNotFound
 }
 
 func (*retryTerminalPriorityHomeDispatcher) AbortAmbiguousDispatch() {}

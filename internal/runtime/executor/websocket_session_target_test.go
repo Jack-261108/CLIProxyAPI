@@ -18,7 +18,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	internalhome "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -978,29 +977,12 @@ func TestAuditHomeCodex426WebsocketToHTTPFreshSelection(t *testing.T) {
 	registry := executionregistry.New()
 	var releaseGroups []executionregistry.ReleaseGroup
 	var releaseGroupsMu sync.Mutex
-	releaseFlusher := internalhome.NewReleaseFlusher(func() config.CredentialConcurrencyConfig {
-		return config.CredentialConcurrencyConfig{
-			ReleaseFlushInterval: time.Millisecond,
-			ReleaseMaxBackoff:    10 * time.Millisecond,
-		}
-	}, func(_ context.Context, frame internalhome.ConcurrencyReleaseFrame) error {
+	registry.SetReleaseSink(func(group executionregistry.ReleaseGroup, _ int64) {
 		dispatcher.releases.Add(1)
 		releaseGroupsMu.Lock()
-		releaseGroups = append(releaseGroups, executionregistry.ReleaseGroup{CredentialID: frame.CredentialID, Model: frame.Model})
+		releaseGroups = append(releaseGroups, group)
 		releaseGroupsMu.Unlock()
-		return nil
 	})
-	registry.SetReleaseSink(releaseFlusher.MarkDirty)
-	releaseCtx, cancelRelease := context.WithCancel(context.Background())
-	releaseDone := make(chan struct{})
-	go func() {
-		defer close(releaseDone)
-		releaseFlusher.Run(releaseCtx)
-	}()
-	defer func() {
-		cancelRelease()
-		<-releaseDone
-	}()
 	manager := cliproxyauth.NewManager(nil, nil, nil)
 	manager.SetConfig(&config.Config{Home: config.HomeConfig{Enabled: true}})
 	manager.PublishHomeDispatch(dispatcher, registry, 1)

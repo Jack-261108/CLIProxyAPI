@@ -9,7 +9,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -108,7 +107,7 @@ func (d *authKindHomeDispatcher) HeartbeatOK() bool {
 func (d *authKindHomeDispatcher) RPopAuth(_ context.Context, _ string, _ string, _ http.Header, count int) ([]byte, error) {
 	d.counts = append(d.counts, count)
 	if count < 1 || count > len(d.auths) {
-		return nil, home.ErrAuthNotFound
+		return nil, ErrHomeAuthNotFound
 	}
 	return json.Marshal(homeAuthDispatchResponse{Auth: d.auths[count-1]})
 }

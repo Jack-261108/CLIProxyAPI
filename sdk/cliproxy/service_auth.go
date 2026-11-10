@@ -691,7 +691,7 @@ func (s *Service) configureCooldownStateStoreContext(ctx context.Context, cfg *c
 }
 
 func (s *Service) resolveCooldownStateStore(cfg *config.Config) coreauth.CooldownStateStore {
-	if cfg == nil || !cfg.SaveCooldownStatus || cfg.Home.Enabled {
+	if cfg == nil || !cfg.SaveCooldownStatus {
 		return nil
 	}
 	if s != nil && s.cooldownStateStore != nil {

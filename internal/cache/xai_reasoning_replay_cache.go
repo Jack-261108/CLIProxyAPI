@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/MoeForge/moego/ojson"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/signature"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	log "github.com/sirupsen/logrus"
@@ -40,13 +40,13 @@ var (
 
 type xaiReasoningReplayKVClient interface {
 	KVGet(ctx context.Context, key string) ([]byte, bool, error)
-	KVSet(ctx context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error)
+	KVSet(ctx context.Context, key string, value []byte, opts KVSetOptions) (bool, error)
 	KVDel(ctx context.Context, keys ...string) (int64, error)
 	KVExpire(ctx context.Context, key string, ttl time.Duration) (bool, error)
 }
 
 var currentXAIReasoningReplayKVClient = func() (xaiReasoningReplayKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return kvstore.CurrentKVClient()
 }
 
 // CacheXAIReasoningReplayItem stores a final Grok reasoning item for stateless
@@ -105,7 +105,7 @@ func StoreXAIReasoningReplayItems(ctx context.Context, modelName, sessionKey str
 			log.Errorf("home kv best-effort xai reasoning replay set failed prefix=cpa:xai:*: %v", errMarshal)
 			return XAIReasoningReplayStoreBackendError
 		}
-		written, errSet := client.KVSet(ctx, xaiReasoningReplayKVKey(modelName, sessionKey), raw, homekv.KVSetOptions{EX: XAIReasoningReplayCacheTTL})
+		written, errSet := client.KVSet(ctx, xaiReasoningReplayKVKey(modelName, sessionKey), raw, KVSetOptions{EX: XAIReasoningReplayCacheTTL})
 		if errSet != nil {
 			log.Errorf("home kv best-effort xai reasoning replay set failed prefix=cpa:xai:*: %v", errSet)
 			return XAIReasoningReplayStoreBackendError
@@ -238,7 +238,7 @@ func xaiReasoningReplayCacheKey(modelName, sessionKey string) string {
 }
 
 func xaiReasoningReplayKVKey(modelName, sessionKey string) string {
-	return "cpa:xai:reasoning-replay:" + homekv.HashKeyPart(strings.TrimSpace(modelName)) + ":" + homekv.HashKeyPart(strings.TrimSpace(sessionKey))
+	return "cpa:xai:reasoning-replay:" + util.HashKeyPart(strings.TrimSpace(modelName)) + ":" + util.HashKeyPart(strings.TrimSpace(sessionKey))
 }
 
 func normalizeXAIReasoningReplayItems(items [][]byte) ([][]byte, bool) {

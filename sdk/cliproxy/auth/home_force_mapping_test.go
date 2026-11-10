@@ -11,7 +11,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	internalhome "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 )
@@ -321,26 +320,9 @@ func (forceMappingAliasChangeExecutor) HttpRequest(context.Context, *Auth, *http
 func TestHomeRetainedRouteRewritesReasoningSuffixAndWaitsForReleaseACK(t *testing.T) {
 	registry := executionregistry.New()
 	dispatcher := &ackOrderedRouteDispatcher{}
-	flusher := internalhome.NewReleaseFlusher(func() internalconfig.CredentialConcurrencyConfig {
-		return internalconfig.CredentialConcurrencyConfig{
-			ReleaseFlushInterval: time.Millisecond,
-			ReleaseMaxBackoff:    10 * time.Millisecond,
-		}
-	}, func(_ context.Context, _ internalhome.ConcurrencyReleaseFrame) error {
+	registry.SetReleaseSink(func(executionregistry.ReleaseGroup, int64) {
 		dispatcher.acks.Add(1)
-		return nil
 	})
-	registry.SetReleaseSink(flusher.MarkDirty)
-	releaseCtx, cancelRelease := context.WithCancel(context.Background())
-	releaseDone := make(chan struct{})
-	go func() {
-		defer close(releaseDone)
-		flusher.Run(releaseCtx)
-	}()
-	defer func() {
-		cancelRelease()
-		<-releaseDone
-	}()
 
 	manager := NewManager(nil, nil, nil)
 	manager.SetConfig(&internalconfig.Config{Home: internalconfig.HomeConfig{Enabled: true}})
@@ -570,26 +552,9 @@ func (e *prefixedRetainedRouteExecutor) Models() []string {
 func TestHomeRedispatchStopsWhenReleaseAcknowledgementFails(t *testing.T) {
 	registry := executionregistry.New()
 	dispatcher := &ackOrderedRouteDispatcher{}
-	flusher := internalhome.NewReleaseFlusher(func() internalconfig.CredentialConcurrencyConfig {
-		return internalconfig.CredentialConcurrencyConfig{
-			CPACancelBound:       20 * time.Millisecond,
-			ReleaseFlushInterval: time.Millisecond,
-			ReleaseMaxBackoff:    time.Millisecond,
-		}
-	}, func(context.Context, internalhome.ConcurrencyReleaseFrame) error {
-		return context.DeadlineExceeded
+	registry.SetReleaseSink(func(group executionregistry.ReleaseGroup, sequence int64) *executionregistry.ReleaseTicket {
+		return executionregistry.NewReleaseTicket(group, sequence, make(chan struct{}))
 	})
-	registry.SetReleaseSink(flusher.MarkDirty)
-	releaseCtx, cancelRelease := context.WithCancel(context.Background())
-	releaseDone := make(chan struct{})
-	go func() {
-		defer close(releaseDone)
-		flusher.Run(releaseCtx)
-	}()
-	defer func() {
-		cancelRelease()
-		<-releaseDone
-	}()
 
 	manager := NewManager(nil, nil, nil)
 	manager.SetConfig(&internalconfig.Config{

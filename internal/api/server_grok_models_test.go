@@ -4,12 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/client/grokbuild"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 )
 
@@ -130,89 +126,5 @@ func TestModelsDispatchKeepsOrdinaryOpenAIResponse(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("registered ordinary model missing: %s", recorder.Body.String())
-	}
-}
-
-func TestGrokHomeModelAdapterOmitsReasoning(t *testing.T) {
-	models := grokModelsFromHomeEntries([]homeModelEntry{
-		{id: "home-model", displayName: "Home Model", contextLength: 1234},
-		{id: "home-model-without-context", displayName: "No Context Model"},
-	})
-	if len(models) != 2 {
-		t.Fatalf("Home model count = %d, want 2", len(models))
-	}
-	if models[0].ID != "home-model" || models[0].DisplayName != "Home Model" || models[0].ContextLength != 1234 {
-		t.Fatalf("Home model adapter = %#v", models[0])
-	}
-	if models[1].ID != "home-model-without-context" || models[1].DisplayName != "No Context Model" || models[1].ContextLength != 0 {
-		t.Fatalf("Home zero-context adapter = %#v", models[1])
-	}
-
-	response := grokbuild.BuildResponse(models)
-	if len(response.Data) != 2 || response.Data[0].ReasoningEfforts != nil || response.Data[1].ReasoningEfforts != nil {
-		t.Fatalf("Home reasoning efforts = %#v", response.Data)
-	}
-
-	wire, errMarshal := json.Marshal(response)
-	if errMarshal != nil {
-		t.Fatalf("marshal Home response: %v", errMarshal)
-	}
-	var wireResponse struct {
-		Data []map[string]json.RawMessage `json:"data"`
-	}
-	if errUnmarshal := json.Unmarshal(wire, &wireResponse); errUnmarshal != nil {
-		t.Fatalf("decode Home response JSON: %v; body=%s", errUnmarshal, wire)
-	}
-	if len(wireResponse.Data) != 2 {
-		t.Fatalf("wire Home model count = %d, want 2; body=%s", len(wireResponse.Data), wire)
-	}
-	contextWindow, exists := wireResponse.Data[0]["context_window"]
-	if !exists {
-		t.Fatalf("Home model context_window missing from wire response: %s", wire)
-	}
-	var gotContextWindow int
-	if errDecode := json.Unmarshal(contextWindow, &gotContextWindow); errDecode != nil {
-		t.Fatalf("decode Home context_window: %v", errDecode)
-	}
-	if gotContextWindow != 1234 {
-		t.Fatalf("Home context_window = %d, want 1234", gotContextWindow)
-	}
-	if _, exists := wireResponse.Data[0]["reasoning_efforts"]; exists {
-		t.Fatalf("Home model contains omitted reasoning_efforts: %s", wire)
-	}
-	if _, exists := wireResponse.Data[1]["context_window"]; exists {
-		t.Fatalf("zero-context Home model contains omitted context_window: %s", wire)
-	}
-	if _, exists := wireResponse.Data[1]["reasoning_efforts"]; exists {
-		t.Fatalf("zero-context Home model contains omitted reasoning_efforts: %s", wire)
-	}
-}
-
-func TestGrokModelsPreferHomeOverRegistry(t *testing.T) {
-	previousHome := home.Current()
-	home.ClearCurrent()
-	t.Cleanup(func() { home.SetCurrent(previousHome) })
-	modelRegistry := registry.GetGlobalRegistry()
-	clientID := "test-grok-home-source"
-	modelRegistry.RegisterClient(clientID, "openai", []*registry.ModelInfo{{ID: "local-only-model"}})
-	t.Cleanup(func() { modelRegistry.UnregisterClient(clientID) })
-
-	server := newTestServer(t)
-	server.cfg.Home.Enabled = true
-	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
-	req.Header.Set("Authorization", "Bearer test-key")
-	req.Header.Set("User-Agent", "grok-shell/0.2.119")
-	recorder := httptest.NewRecorder()
-	ginContext, _ := gin.CreateTestContext(recorder)
-	ginContext.Request = req
-	server.handleGrokModels(ginContext)
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusServiceUnavailable, recorder.Body.String())
-	}
-	if !strings.Contains(recorder.Body.String(), "home control center unavailable") {
-		t.Fatalf("Home failure response missing expected error: %s", recorder.Body.String())
-	}
-	if strings.Contains(recorder.Body.String(), "local-only-model") {
-		t.Fatalf("Home failure response leaked local registry model: %s", recorder.Body.String())
 	}
 }

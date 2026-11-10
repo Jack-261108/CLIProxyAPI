@@ -5,11 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	"strings"
 	"sync"
 	"time"
-
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type userIDCacheEntry struct {
@@ -146,5 +145,5 @@ func CachedUserIDRequired(ctx context.Context, apiKey string) (string, error) {
 }
 
 func claudeUserIDKVKey(apiKey string) string {
-	return "cpa:claude:user-id:" + homekv.HashKeyPart(apiKey)
+	return "cpa:claude:user-id:" + util.HashKeyPart(apiKey)
 }

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	internalcache "github.com/router-for-me/CLIProxyAPI/v8/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -82,7 +82,7 @@ func (c *fakeAntigravityKVClient) KVGet(_ context.Context, key string) ([]byte, 
 	return append([]byte(nil), value...), true, nil
 }
 
-func (c *fakeAntigravityKVClient) KVSet(_ context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error) {
+func (c *fakeAntigravityKVClient) KVSet(_ context.Context, key string, value []byte, opts internalcache.KVSetOptions) (bool, error) {
 	c.setCount++
 	c.lastSetKey = key
 	c.lastSetTTL = opts.EX

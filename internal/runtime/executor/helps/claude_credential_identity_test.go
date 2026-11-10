@@ -5,20 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/MoeForge/moego/ojson"
 	claudeauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/claude"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 )
 
 type fakeClaudeCredentialDevicePoolKV struct {
 	values  map[string][]byte
-	setOpts []homekv.KVSetOptions
+	setOpts []KVSetOptions
 }
 
 func (fake *fakeClaudeCredentialDevicePoolKV) KVGet(_ context.Context, key string) ([]byte, bool, error) {
@@ -26,7 +26,7 @@ func (fake *fakeClaudeCredentialDevicePoolKV) KVGet(_ context.Context, key strin
 	return bytes.Clone(value), found, nil
 }
 
-func (fake *fakeClaudeCredentialDevicePoolKV) KVSet(_ context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error) {
+func (fake *fakeClaudeCredentialDevicePoolKV) KVSet(_ context.Context, key string, value []byte, opts KVSetOptions) (bool, error) {
 	_, found := fake.values[key]
 	if (opts.NX && found) || (opts.XX && !found) {
 		return false, nil
@@ -89,7 +89,7 @@ func TestClaudeAgentSessionUUIDUsesExecutionAndDerivedIdentity(t *testing.T) {
 
 func TestEnsureClaudeCredentialDevicePoolRequiredMigratesHomeKVToOne(t *testing.T) {
 	auth := &cliproxyauth.Auth{ID: "legacy-five-device-credential", Metadata: map[string]any{}}
-	key := "cpa:claude:credential-device-pool:" + homekv.HashKeyPart(auth.EnsureIndex())
+	key := "cpa:claude:credential-device-pool:" + util.HashKeyPart(auth.EnsureIndex())
 	legacy := []string{
 		"0000000000000000000000000000000000000000000000000000000000000000",
 		"1111111111111111111111111111111111111111111111111111111111111111",

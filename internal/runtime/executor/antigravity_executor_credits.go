@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/MoeForge/moego/ojson"
+	internalcache "github.com/router-for-me/CLIProxyAPI/v8/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
@@ -64,13 +66,13 @@ var (
 
 type antigravityKVClient interface {
 	KVGet(ctx context.Context, key string) ([]byte, bool, error)
-	KVSet(ctx context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error)
+	KVSet(ctx context.Context, key string, value []byte, opts internalcache.KVSetOptions) (bool, error)
 	KVSetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error)
 	KVDel(ctx context.Context, keys ...string) (int64, error)
 }
 
 var currentAntigravityKVClient = func() (antigravityKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return kvstore.CurrentKVClient()
 }
 
 type antigravityCreditsBalance struct {
@@ -663,7 +665,7 @@ func antigravityShortCooldownKVKey(auth *cliproxyauth.Auth, modelName string) st
 	if authID == "" || modelName == "" {
 		return ""
 	}
-	return "cpa:antigravity:short-cooldown:" + authID + ":" + homekv.HashKeyPart(modelName)
+	return "cpa:antigravity:short-cooldown:" + authID + ":" + util.HashKeyPart(modelName)
 }
 
 func antigravityCoolingDisabled(auth *cliproxyauth.Auth, cfg *config.Config) bool {
@@ -751,7 +753,7 @@ func markAntigravityShortCooldownRequired(ctx context.Context, auth *cliproxyaut
 			return nil
 		}
 		until := now.Add(duration)
-		written, errSet := client.KVSet(ctx, kvKey, []byte(strconv.FormatInt(until.UnixNano(), 10)), homekv.KVSetOptions{EX: duration + 5*time.Second})
+		written, errSet := client.KVSet(ctx, kvKey, []byte(strconv.FormatInt(until.UnixNano(), 10)), internalcache.KVSetOptions{EX: duration + 5*time.Second})
 		if errSet != nil {
 			return errSet
 		}
@@ -784,7 +786,7 @@ func storeAntigravityCreditsBalanceBestEffort(authID string, bal antigravityCred
 			log.Errorf("antigravity executor: home kv best-effort credits balance set failed prefix=cpa:antigravity:*: %v", errMarshal)
 			return
 		}
-		if _, errSet := client.KVSet(context.Background(), antigravityCreditsBalanceKey(authID), raw, homekv.KVSetOptions{EX: 30 * time.Minute}); errSet != nil {
+		if _, errSet := client.KVSet(context.Background(), antigravityCreditsBalanceKey(authID), raw, internalcache.KVSetOptions{EX: 30 * time.Minute}); errSet != nil {
 			log.Errorf("antigravity executor: home kv best-effort credits balance set failed prefix=cpa:antigravity:*: %v", errSet)
 		}
 		return

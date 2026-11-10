@@ -203,9 +203,8 @@ type Manager struct {
 	homeSessionLocks      sync.Map
 	homeSessionAliases    homeSessionAliasCache
 	// providerOffsets tracks per-model provider rotation state for multi-provider routing.
-	providerOffsets             map[string]int
-	homeDispatchBundle          atomic.Pointer[HomeDispatchBundle]
-	homeInFlightPublisherConfig atomic.Pointer[HomeInFlightPublisherConfig]
+	providerOffsets    map[string]int
+	homeDispatchBundle atomic.Pointer[HomeDispatchBundle]
 
 	// Retry controls request retry behavior.
 	requestRetry        atomic.Int32
@@ -274,10 +273,6 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
 	// atomic.Value requires non-nil initial value.
 	manager.runtimeConfig.Store(&internalconfig.Config{})
 	manager.apiKeyModelRouting.Store(&apiKeyModelRoutingSnapshot{config: &internalconfig.Config{}})
-	defaultInFlightConfig, errInFlightConfig := HomeInFlightPublisherConfigFromConfig(internalconfig.DefaultCredentialInFlightConfig())
-	if errInFlightConfig == nil {
-		manager.ApplyHomeInFlightPublisherConfig(defaultInFlightConfig)
-	}
 	manager.scheduler = newAuthScheduler(selector)
 	return manager
 }

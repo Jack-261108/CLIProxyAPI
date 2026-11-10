@@ -14,7 +14,7 @@ import (
 
 	"github.com/MoeForge/moego/ojson"
 	"github.com/google/uuid"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 )
 
 const (
@@ -25,6 +25,8 @@ const (
 	claudeSessionDatePinKVPrefix    = "cpa:claude:session-date-pin:"
 )
 
+var ErrCompareAndSwapUnsupported = kvstore.ErrCompareAndSwapUnsupported
+
 type claudeSessionDatePinKVClient interface {
 	KVGet(ctx context.Context, key string) ([]byte, bool, error)
 	KVSetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error)
@@ -32,7 +34,7 @@ type claudeSessionDatePinKVClient interface {
 }
 
 var currentClaudeSessionDatePinKVClient = func() (claudeSessionDatePinKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return kvstore.CurrentKVClient()
 }
 
 var (

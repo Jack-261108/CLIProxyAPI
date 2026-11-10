@@ -12,7 +12,7 @@ import (
 
 	"github.com/MoeForge/moego/base64"
 	"github.com/MoeForge/moego/ojson"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	log "github.com/sirupsen/logrus"
 )
@@ -74,13 +74,13 @@ var (
 
 type antigravityReasoningReplayKVClient interface {
 	KVGet(ctx context.Context, key string) ([]byte, bool, error)
-	KVSet(ctx context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error)
+	KVSet(ctx context.Context, key string, value []byte, opts KVSetOptions) (bool, error)
 	KVCompareAndSwap(ctx context.Context, key string, expected []byte, expectedExists bool, value []byte, ttl time.Duration) (bool, error)
 	KVExpire(ctx context.Context, key string, ttl time.Duration) (bool, error)
 }
 
 var currentAntigravityReasoningReplayKVClient = func() (antigravityReasoningReplayKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return kvstore.CurrentKVClient()
 }
 
 // CacheAntigravityReasoningReplayItem stores a final GPT/Codex reasoning item for
@@ -116,7 +116,7 @@ func CacheAntigravityReasoningReplayItemsBestEffort(ctx context.Context, modelNa
 			log.Errorf("home kv best-effort antigravity reasoning replay set failed prefix=cpa:antigravity:*: %v", errMarshal)
 			return false
 		}
-		written, errSet := client.KVSet(ctx, antigravityReasoningReplayKVKey(modelName, sessionKey), raw, homekv.KVSetOptions{EX: AntigravityReasoningReplayCacheTTL})
+		written, errSet := client.KVSet(ctx, antigravityReasoningReplayKVKey(modelName, sessionKey), raw, KVSetOptions{EX: AntigravityReasoningReplayCacheTTL})
 		if errSet != nil {
 			log.Errorf("home kv best-effort antigravity reasoning replay set failed prefix=cpa:antigravity:*: %v", errSet)
 			return false
@@ -431,7 +431,7 @@ func DeleteAntigravityReasoningReplayItemRequired(ctx context.Context, modelName
 		if errClient != nil {
 			return errClient
 		}
-		_, errSet := client.KVSet(ctx, antigravityReasoningReplayKVKey(modelName, sessionKey), newAntigravityReasoningReplayTombstone(), homekv.KVSetOptions{EX: AntigravityReasoningReplayCacheTTL})
+		_, errSet := client.KVSet(ctx, antigravityReasoningReplayKVKey(modelName, sessionKey), newAntigravityReasoningReplayTombstone(), KVSetOptions{EX: AntigravityReasoningReplayCacheTTL})
 		return errSet
 	}
 	cacheCleanupOnce.Do(startCacheCleanup)
@@ -567,7 +567,7 @@ func antigravityReasoningReplayCacheKey(modelName, sessionKey string) string {
 }
 
 func antigravityReasoningReplayKVKey(modelName, sessionKey string) string {
-	return "cpa:antigravity:reasoning-replay:" + homekv.HashKeyPart(strings.TrimSpace(modelName)) + ":" + homekv.HashKeyPart(strings.TrimSpace(sessionKey))
+	return "cpa:antigravity:reasoning-replay:" + util.HashKeyPart(strings.TrimSpace(modelName)) + ":" + util.HashKeyPart(strings.TrimSpace(sessionKey))
 }
 
 func normalizeAntigravityReasoningReplayItems(items [][]byte) ([][]byte, bool) {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -269,10 +268,7 @@ func TestMalformedAccountedTupleClosesHomeClient(t *testing.T) {
 
 func TestConcurrencyDispatchFixture(t *testing.T) {
 	t.Run("accounted", func(t *testing.T) {
-		raw, errRead := os.ReadFile("../../../internal/home/testdata/concurrency_dispatch_accounted.json")
-		if errRead != nil {
-			t.Fatalf("ReadFile(accounted fixture) error = %v", errRead)
-		}
+		raw := []byte(`{"model":"gpt","provider":"codex","auth_index":"cred-1","auth":{"id":"cred-1","provider":"codex"},"concurrency":{"accounted":true,"credential_id":"cred-1","model":"gpt"}}`)
 
 		var fixture struct {
 			Model     string `json:"model"`
@@ -330,10 +326,7 @@ func TestConcurrencyDispatchFixture(t *testing.T) {
 	})
 
 	t.Run("busy", func(t *testing.T) {
-		raw, errRead := os.ReadFile("../../../internal/home/testdata/concurrency_dispatch_busy.json")
-		if errRead != nil {
-			t.Fatalf("ReadFile(busy fixture) error = %v", errRead)
-		}
+		raw := []byte(`{"error":{"type":"credential_concurrency_exceeded","message":"credential concurrency limit reached","retryable":true,"retry_after_ms":750}}`)
 
 		var fixture struct {
 			Error *struct {

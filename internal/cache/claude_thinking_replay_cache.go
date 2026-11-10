@@ -12,7 +12,7 @@ import (
 
 	"github.com/MoeForge/moego/ojson"
 	"github.com/google/uuid"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	log "github.com/sirupsen/logrus"
 )
@@ -65,7 +65,7 @@ var (
 )
 
 var currentClaudeThinkingReplayKVClient = func() (kimiThinkingReplayKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return kvstore.CurrentKVClient()
 }
 
 // CacheClaudeThinkingReplayBestEffort stores one complete signed assistant content array.
@@ -89,7 +89,7 @@ func CacheClaudeThinkingReplayBestEffort(ctx context.Context, modelFamily, sessi
 			log.Errorf("home kv best-effort Claude thinking replay set failed: %v", errMarshal)
 			return false
 		}
-		written, errSet := client.KVSet(ctx, claudeThinkingReplayKVKey(modelFamily, sessionKey), raw, homekv.KVSetOptions{EX: ClaudeThinkingReplayCacheTTL})
+		written, errSet := client.KVSet(ctx, claudeThinkingReplayKVKey(modelFamily, sessionKey), raw, KVSetOptions{EX: ClaudeThinkingReplayCacheTTL})
 		if errSet != nil {
 			log.Errorf("home kv best-effort Claude thinking replay set failed: %v", errSet)
 			return false
@@ -408,7 +408,7 @@ func claudeThinkingReplayCacheKey(modelFamily, sessionKey string) string {
 }
 
 func claudeThinkingReplayKVKey(modelFamily, sessionKey string) string {
-	return "cpa:claude:thinking-replay:" + homekv.HashKeyPart(strings.TrimSpace(modelFamily)) + ":" + homekv.HashKeyPart(strings.TrimSpace(sessionKey))
+	return "cpa:claude:thinking-replay:" + util.HashKeyPart(strings.TrimSpace(modelFamily)) + ":" + util.HashKeyPart(strings.TrimSpace(sessionKey))
 }
 
 func validClaudeThinkingReplayContent(content []byte) bool {

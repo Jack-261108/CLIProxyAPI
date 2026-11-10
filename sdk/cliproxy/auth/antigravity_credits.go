@@ -5,8 +5,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type antigravityUseCreditsContextKey struct{}
@@ -57,10 +55,6 @@ func SetAntigravityCreditsHint(authID string, hint AntigravityCreditsHint) {
 	if hint.UpdatedAt.IsZero() {
 		hint.UpdatedAt = time.Now()
 	}
-	if _, homeMode, _ := homekv.CurrentKVClient(); homeMode {
-		homekv.KVSetJSONBestEffort(context.Background(), antigravityCreditsHintKey(authID), hint, 30*time.Minute)
-		return
-	}
 	antigravityCreditsHintByAuth.Store(authID, hint)
 }
 
@@ -78,11 +72,6 @@ func GetAntigravityCreditsHintRequired(ctx context.Context, authID string) (Anti
 	authID = strings.TrimSpace(authID)
 	if authID == "" {
 		return AntigravityCreditsHint{}, false, nil
-	}
-	var homeHint AntigravityCreditsHint
-	homeMode, found, errGet := homekv.KVGetJSONRequired(ctx, antigravityCreditsHintKey(authID), &homeHint)
-	if homeMode {
-		return homeHint, found, errGet
 	}
 	value, ok := antigravityCreditsHintByAuth.Load(authID)
 	if !ok {

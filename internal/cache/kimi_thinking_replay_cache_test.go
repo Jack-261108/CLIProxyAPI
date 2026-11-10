@@ -6,8 +6,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type fakeKimiThinkingReplayKVClient struct {
@@ -26,7 +24,7 @@ func (c *fakeKimiThinkingReplayKVClient) KVGet(_ context.Context, key string) ([
 	return append([]byte(nil), value...), found, nil
 }
 
-func (c *fakeKimiThinkingReplayKVClient) KVSet(_ context.Context, key string, value []byte, _ homekv.KVSetOptions) (bool, error) {
+func (c *fakeKimiThinkingReplayKVClient) KVSet(_ context.Context, key string, value []byte, _ KVSetOptions) (bool, error) {
 	c.mu.Lock()
 	c.values[key] = append([]byte(nil), value...)
 	c.mu.Unlock()

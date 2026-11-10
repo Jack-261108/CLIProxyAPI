@@ -408,7 +408,6 @@ access:
 			method string
 			path   string
 		}{
-			{http.MethodPost, "/v8/management/plugins/store/demo/install"},
 			{http.MethodPut, "/v8/management/config"},
 		} {
 			reqMgmt := httptest.NewRequest(endpoint.method, endpoint.path, io.NopCloser(strings.NewReader(`{"version":"`+strings.Repeat("v", 128)+`"}`)))

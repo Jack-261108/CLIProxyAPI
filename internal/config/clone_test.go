@@ -151,9 +151,8 @@ func sampleCloneRuntimeConfig() *Config {
 			},
 		},
 		Plugins: PluginsConfig{
-			Enabled:      true,
-			Dir:          "plugins",
-			StoreSources: []string{"https://plugins.example/store.json"},
+			Enabled: true,
+			Dir:     "plugins",
 			Configs: map[string]PluginInstanceConfig{
 				"sample": {
 					Enabled:  &pluginEnabled,

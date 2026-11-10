@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 func TestClaudeDiagnosticsTracksCompletedMessagePerCredentialSession(t *testing.T) {
@@ -727,7 +726,7 @@ func TestPinClaudeSessionDateKVConcurrentCorruptedRepairUsesCAS(t *testing.T) {
 	// fallback without performing an unconditional KV overwrite race.
 	resetClaudeDiagnosticsForTest()
 	fakeKV.values[wantKVKey] = []byte("corrupted-again")
-	fakeKV.casErr = homekv.ErrCompareAndSwapUnsupported
+	fakeKV.casErr = ErrCompareAndSwapUnsupported
 	key3, _, _ := BeginClaudeDiagnostics("cred-3", "session-cas")
 	key4, _, _ := BeginClaudeDiagnostics("cred-4", "session-cas")
 

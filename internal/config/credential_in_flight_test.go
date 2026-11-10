@@ -70,46 +70,6 @@ func assertOptionalConfigFallback(t *testing.T, cfg *Config) {
 	}
 }
 
-func TestCredentialInFlightConfigContractFixture(t *testing.T) {
-	raw, errRead := os.ReadFile(filepath.Join("..", "home", "testdata", "credential_in_flight_contract.json"))
-	if errRead != nil {
-		t.Fatal(errRead)
-	}
-	fixture, errDecode := decodeCredentialInFlightConfigFixture(raw)
-	if errDecode != nil {
-		t.Fatal(errDecode)
-	}
-	if fixture.Config != DefaultCredentialInFlightConfig() {
-		t.Fatalf("default config = %#v, want %#v", DefaultCredentialInFlightConfig(), fixture.Config)
-	}
-	if errValidate := fixture.Config.Validate(); errValidate != nil {
-		t.Fatalf("Validate() error = %v", errValidate)
-	}
-	assertCredentialInFlightConfigFields(t)
-	assertRequiredJSONKeys(t, raw, []string{"config", "part", "overflow"})
-	assertRequiredJSONKeys(t, fixture.ConfigJSON, []string{"snapshot-interval", "stale-after", "max-part-bytes", "max-part-count", "max-revision-bytes", "max-aggregate-groups", "max-details", "max-string-bytes", "staging-retention"})
-}
-
-func TestCredentialInFlightConfigFixtureRejectsInvalidJSON(t *testing.T) {
-	raw, errRead := os.ReadFile(filepath.Join("..", "home", "testdata", "credential_in_flight_contract.json"))
-	if errRead != nil {
-		t.Fatal(errRead)
-	}
-	for _, test := range []struct {
-		name string
-		raw  []byte
-	}{
-		{name: "unknown config field", raw: bytes.Replace(raw, []byte(`"snapshot-interval": "2s"`), []byte(`"snapshot-interval": "2s", "secret": "secret"`), 1)},
-		{name: "trailing JSON", raw: append(append([]byte{}, raw...), []byte(` {"config": {}}`)...)},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if _, errDecode := decodeCredentialInFlightConfigFixture(test.raw); errDecode == nil {
-				t.Fatal("decodeCredentialInFlightConfigFixture() error = nil")
-			}
-		})
-	}
-}
-
 func TestCredentialInFlightConfigDurationBounds(t *testing.T) {
 	for _, test := range []struct {
 		name  string

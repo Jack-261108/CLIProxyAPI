@@ -11,7 +11,7 @@ import (
 
 	"github.com/MoeForge/moego/ojson"
 	"github.com/google/uuid"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	log "github.com/sirupsen/logrus"
 )
@@ -67,14 +67,14 @@ var (
 
 type kimiThinkingReplayKVClient interface {
 	KVGet(ctx context.Context, key string) ([]byte, bool, error)
-	KVSet(ctx context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error)
+	KVSet(ctx context.Context, key string, value []byte, opts KVSetOptions) (bool, error)
 	KVDel(ctx context.Context, keys ...string) (int64, error)
 	KVCompareAndSwap(ctx context.Context, key string, expected []byte, expectedExists bool, value []byte, ttl time.Duration) (bool, error)
 	KVExpire(ctx context.Context, key string, ttl time.Duration) (bool, error)
 }
 
 var currentKimiThinkingReplayKVClient = func() (kimiThinkingReplayKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return kvstore.CurrentKVClient()
 }
 
 // CacheKimiThinkingReplayBestEffort stores one complete signed assistant content array.
@@ -98,7 +98,7 @@ func CacheKimiThinkingReplayBestEffort(ctx context.Context, modelFamily, session
 			log.Errorf("home kv best-effort kimi thinking replay set failed prefix=cpa:kimi:*: %v", errMarshal)
 			return false
 		}
-		written, errSet := client.KVSet(ctx, kimiThinkingReplayKVKey(modelFamily, sessionKey), raw, homekv.KVSetOptions{EX: KimiThinkingReplayCacheTTL})
+		written, errSet := client.KVSet(ctx, kimiThinkingReplayKVKey(modelFamily, sessionKey), raw, KVSetOptions{EX: KimiThinkingReplayCacheTTL})
 		if errSet != nil {
 			log.Errorf("home kv best-effort kimi thinking replay set failed prefix=cpa:kimi:*: %v", errSet)
 			return false
@@ -369,7 +369,7 @@ func kimiThinkingReplayCacheKey(modelFamily, sessionKey string) string {
 }
 
 func kimiThinkingReplayKVKey(modelFamily, sessionKey string) string {
-	return "cpa:kimi:thinking-replay:" + homekv.HashKeyPart(strings.TrimSpace(modelFamily)) + ":" + homekv.HashKeyPart(strings.TrimSpace(sessionKey))
+	return "cpa:kimi:thinking-replay:" + util.HashKeyPart(strings.TrimSpace(modelFamily)) + ":" + util.HashKeyPart(strings.TrimSpace(sessionKey))
 }
 
 func validKimiThinkingReplayContent(content []byte) bool {

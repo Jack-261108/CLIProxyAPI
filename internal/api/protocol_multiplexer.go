@@ -170,16 +170,11 @@ func (s *Server) routeMuxConnection(conn net.Conn, httpListener *muxListener) {
 	}
 
 	reader := bufio.NewReader(conn)
-	prefix, errPeek := reader.Peek(1)
+	_, errPeek := reader.Peek(1)
 	if errPeek != nil {
 		if errClose := conn.Close(); errClose != nil {
 			log.Errorf("failed to close connection after protocol peek failure: %v", errClose)
 		}
-		return
-	}
-
-	if isRedisRESPPrefix(prefix[0]) {
-		s.handleRedisConnection(conn, reader)
 		return
 	}
 

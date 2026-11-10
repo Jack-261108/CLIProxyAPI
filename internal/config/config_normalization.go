@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginstore"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -18,18 +17,6 @@ func (cfg *Config) NormalizePluginsConfig() {
 	if cfg.Plugins.Dir == "" {
 		cfg.Plugins.Dir = defaultPluginsDir
 	}
-	if len(cfg.Plugins.StoreSources) > 0 {
-		sources := make([]string, 0, len(cfg.Plugins.StoreSources))
-		for _, source := range cfg.Plugins.StoreSources {
-			source = strings.TrimSpace(source)
-			if source == "" {
-				continue
-			}
-			sources = append(sources, source)
-		}
-		cfg.Plugins.StoreSources = sources
-	}
-	cfg.Plugins.StoreAuth = sdkpluginstore.NormalizeAuthConfigs(cfg.Plugins.StoreAuth)
 	if cfg.Plugins.Configs == nil {
 		cfg.Plugins.Configs = map[string]PluginInstanceConfig{}
 	}

@@ -94,7 +94,7 @@ func TestManagementV8IndependentContract(t *testing.T) {
 		"POST /v8/management/routing/model-definitions/refresh",
 		"POST /v8/management/models/refresh",
 		"GET /v8/management/plugins/:id/quota", "POST /v8/management/plugins/:id/quota", "DELETE /v8/management/plugins/:id/quota",
-		"POST /v8/management/plugins/store/:id/install", "DELETE /v8/management/plugins/:id",
+		"DELETE /v8/management/plugins/:id",
 	} {
 		if !routes[route] {
 			t.Errorf("missing route %s", route)

@@ -70,63 +70,6 @@ func TestLoadConfig_PluginsDirExpandsLeadingTilde(t *testing.T) {
 	}
 }
 
-func TestParseConfigBytes_PluginStoreSources(t *testing.T) {
-	cfg, errParse := ParseConfigBytes([]byte(`
-plugins:
-  store-sources:
-    - " https://community.example/registry.json "
-    - ""
-`))
-	if errParse != nil {
-		t.Fatalf("ParseConfigBytes() error = %v", errParse)
-	}
-
-	if len(cfg.Plugins.StoreSources) != 1 {
-		t.Fatalf("Plugins.StoreSources len = %d, want 1", len(cfg.Plugins.StoreSources))
-	}
-	source := cfg.Plugins.StoreSources[0]
-	if source != "https://community.example/registry.json" {
-		t.Fatalf("Plugins.StoreSources[0] = %#v", source)
-	}
-}
-
-func TestParseConfigBytes_PluginStoreAuth(t *testing.T) {
-	cfg, errParse := ParseConfigBytes([]byte(`
-plugins:
-  store-auth:
-    - match: " https://plugins.example.com/ "
-      apply-to: ["registry", "artifact", "registry"]
-      type: bearer
-      token-env: " CLIPROXY_PLUGIN_STORE_TOKEN "
-    - match: ""
-      type: bearer
-`))
-	if errParse != nil {
-		t.Fatalf("ParseConfigBytes() error = %v", errParse)
-	}
-
-	if len(cfg.Plugins.StoreAuth) != 1 {
-		t.Fatalf("Plugins.StoreAuth len = %d, want 1", len(cfg.Plugins.StoreAuth))
-	}
-	auth := cfg.Plugins.StoreAuth[0]
-	if auth.Match != "https://plugins.example.com/" || auth.Type != "bearer" || auth.TokenEnv != "CLIPROXY_PLUGIN_STORE_TOKEN" {
-		t.Fatalf("Plugins.StoreAuth[0] = %#v", auth)
-	}
-	if len(auth.ApplyTo) != 2 || auth.ApplyTo[0] != "registry" || auth.ApplyTo[1] != "artifact" {
-		t.Fatalf("Plugins.StoreAuth[0].ApplyTo = %#v", auth.ApplyTo)
-	}
-}
-
-func TestParseConfigBytes_PluginAuthRevision(t *testing.T) {
-	cfg, errParse := ParseConfigBytes([]byte("plugins:\n  auth-revision: 42\n"))
-	if errParse != nil {
-		t.Fatalf("ParseConfigBytes() error = %v", errParse)
-	}
-	if cfg.Plugins.AuthRevision != 42 {
-		t.Fatalf("Plugins.AuthRevision = %d, want 42", cfg.Plugins.AuthRevision)
-	}
-}
-
 func TestParseConfigBytes_PluginInstanceEmptyRawYAML(t *testing.T) {
 	cfg, errParse := ParseConfigBytes([]byte(`
 plugins:

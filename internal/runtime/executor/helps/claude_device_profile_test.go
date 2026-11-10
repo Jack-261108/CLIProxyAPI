@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 )
 
@@ -48,7 +47,7 @@ func (c *fakeClaudeDeviceProfileKVClient) KVGet(_ context.Context, key string) (
 	return append([]byte(nil), value...), true, nil
 }
 
-func (c *fakeClaudeDeviceProfileKVClient) KVSet(_ context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error) {
+func (c *fakeClaudeDeviceProfileKVClient) KVSet(_ context.Context, key string, value []byte, opts KVSetOptions) (bool, error) {
 	c.setCount++
 	c.lastSetTTL = opts.EX
 	if c.setErr != nil {

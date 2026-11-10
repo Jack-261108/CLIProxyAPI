@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -14,7 +13,6 @@ import (
 	"github.com/MoeForge/moego/ojson"
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	sdktranslator "github.com/router-for-me/CLIProxyAPI/v8/sdk/translator"
@@ -421,24 +419,7 @@ func formatCodexSpawnAgentModelsForRequest(ctx context.Context, headers http.Hea
 }
 
 func codexHomeAvailableModels(ctx context.Context, headers http.Header) []map[string]any {
-	client := home.Current()
-	if client == nil {
-		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	requestHeaders := headers
-	if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil && ginCtx.Request != nil {
-		requestHeaders = ginCtx.Request.Header
-	}
-	query := make(url.Values)
-	query.Set("client_version", "")
-	raw, errGet := client.GetModels(ctx, requestHeaders, query)
-	if errGet != nil {
-		return nil
-	}
-	return decodeCodexHomeAvailableModels(raw)
+	return nil
 }
 
 func decodeCodexHomeAvailableModels(raw []byte) []map[string]any {

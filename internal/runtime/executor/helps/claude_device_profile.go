@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	"net/http"
 	"regexp"
 	"runtime"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 )
 
@@ -44,13 +44,13 @@ var (
 
 type claudeDeviceProfileKVClient interface {
 	KVGet(ctx context.Context, key string) ([]byte, bool, error)
-	KVSet(ctx context.Context, key string, value []byte, opts homekv.KVSetOptions) (bool, error)
+	KVSet(ctx context.Context, key string, value []byte, opts KVSetOptions) (bool, error)
 	KVSetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error)
 	KVExpire(ctx context.Context, key string, ttl time.Duration) (bool, error)
 }
 
 var currentClaudeDeviceProfileKVClient = func() (claudeDeviceProfileKVClient, bool, error) {
-	return homekv.CurrentKVClient()
+	return nil, false, nil
 }
 
 type claudeCLIVersion struct {
@@ -383,11 +383,11 @@ func claudeDeviceProfileCacheKey(auth *cliproxyauth.Auth, apiKey string, profile
 }
 
 func claudeDeviceProfileKVKey(auth *cliproxyauth.Auth, apiKey string, profile ClaudeDeviceProfile, configs ...*config.Config) string {
-	return "cpa:claude:device-profile:" + homekv.HashKeyPart(claudeDeviceProfileScopedKey(auth, apiKey, profile, configs...))
+	return "cpa:claude:device-profile:" + util.HashKeyPart(claudeDeviceProfileScopedKey(auth, apiKey, profile, configs...))
 }
 
 func claudeDeviceProfileLockKVKey(auth *cliproxyauth.Auth, apiKey string, profile ClaudeDeviceProfile, configs ...*config.Config) string {
-	return "cpa:claude:device-profile-lock:" + homekv.HashKeyPart(claudeDeviceProfileScopedKey(auth, apiKey, profile, configs...))
+	return "cpa:claude:device-profile-lock:" + util.HashKeyPart(claudeDeviceProfileScopedKey(auth, apiKey, profile, configs...))
 }
 
 func startClaudeDeviceProfileCacheCleanup() {
@@ -582,7 +582,7 @@ func writeClaudeDeviceProfileToHome(ctx context.Context, client claudeDeviceProf
 	if errMarshal != nil {
 		return errMarshal
 	}
-	written, errSet := client.KVSet(ctx, key, raw, homekv.KVSetOptions{EX: claudeDeviceProfileTTL})
+	written, errSet := client.KVSet(ctx, key, raw, KVSetOptions{EX: claudeDeviceProfileTTL})
 	if errSet != nil {
 		return errSet
 	}

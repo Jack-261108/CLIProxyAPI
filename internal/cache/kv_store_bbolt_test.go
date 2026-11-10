@@ -8,19 +8,15 @@ import (
 	"time"
 
 	"github.com/MoeForge/moego/ojson"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 )
 
 func TestKVStoreBBoltPersistenceAndRouting(t *testing.T) {
-	homekv.ClearCurrent()
 	_ = kvstore.ShutdownLocal()
 	ClearSignatureCache("")
 	ClearCodexReasoningReplayCache()
 	ClearClaudeWebSearchResultCache()
 	t.Cleanup(func() {
-		homekv.ClearCurrent()
 		_ = kvstore.ShutdownLocal()
 		ClearSignatureCache("")
 		ClearCodexReasoningReplayCache()
@@ -77,28 +73,7 @@ func TestKVStoreBBoltPersistenceAndRouting(t *testing.T) {
 		t.Fatalf("GetClaudeWebSearchResult() after ClearClaudeWebSearchResultCache = (%q, %v), want (%q, true)", gotWeb, foundWeb, webContent)
 	}
 
-	// 4. When Home mode is active (home.SetCurrent), Home KV takes priority over local bbolt.
-	homeClient := homekv.New(config.HomeConfig{Enabled: true, Host: "127.0.0.1", Port: 1})
-	homekv.SetCurrent(homeClient)
-	if gotHomeSig := GetCachedSignature(testModelName, sigText); gotHomeSig != "" {
-		t.Fatalf("GetCachedSignature() in Home mode = %q, want empty (must not read local bbolt)", gotHomeSig)
-	}
-	if _, errHomeSig := GetCachedSignatureRequired(context.Background(), testModelName, sigText); errHomeSig == nil {
-		t.Fatalf("GetCachedSignatureRequired() in unavailable Home mode = nil error, want Home unavailable error")
-	}
-	homeOnlyText := "thinking text attempted while Home active"
-	CacheSignature(testModelName, homeOnlyText, sigVal)
-	homekv.ClearCurrent()
-
-	// After clearing Home client, bbolt is active again: original key is still readable, Home-only write did not touch bbolt.
-	if gotAfterHome := GetCachedSignature(testModelName, sigText); gotAfterHome != sigVal {
-		t.Fatalf("GetCachedSignature() after ClearCurrent = %q, want %q", gotAfterHome, sigVal)
-	}
-	if gotHomeOnly := GetCachedSignature(testModelName, homeOnlyText); gotHomeOnly != "" {
-		t.Fatalf("GetCachedSignature(homeOnlyText) = %q, want empty", gotHomeOnly)
-	}
-
-	// 5. Disabling local bbolt KV restores standard in-memory cache behavior.
+	// 4. Disabling local bbolt KV restores standard in-memory cache behavior.
 	if errDisable := kvstore.ConfigureLocal(false, ""); errDisable != nil {
 		t.Fatalf("kvstore.ConfigureLocal(false, \"\") error = %v", errDisable)
 	}

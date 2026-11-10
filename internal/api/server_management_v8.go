@@ -62,8 +62,6 @@ func (s *Server) registerManagementV8Routes() {
 
 	v8.GET("/plugins", s.mgmt.ListPlugins)
 	v8.DELETE("/plugins/:id", s.mgmt.DeletePlugin)
-	v8.GET("/plugins/store", s.mgmt.ListPluginStore)
-	v8.POST("/plugins/store/:id/install", s.mgmt.InstallPluginFromStore)
 	v8.GET("/plugins/:id/quota", s.mgmt.GetPluginQuota)
 	v8.POST("/plugins/:id/quota", s.mgmt.FetchPluginQuota)
 	v8.DELETE("/plugins/:id/quota", s.mgmt.ResetPluginQuota)

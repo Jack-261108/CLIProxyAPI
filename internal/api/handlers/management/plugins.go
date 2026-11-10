@@ -99,7 +99,7 @@ func (h *Handler) ListPlugins(c *gin.Context) {
 	}
 	pluginsDir = resolvedPluginsDir
 	entries := make(map[string]pluginListEntry)
-	files, errDiscover := pluginhost.DiscoverPluginFiles(pluginsDir, pluginStoreDesiredVersions(configs))
+	files, errDiscover := pluginhost.DiscoverPluginFiles(pluginsDir)
 	if errDiscover != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "plugin_discovery_failed", "message": errDiscover.Error()})
 		return
@@ -348,7 +348,7 @@ func (h *Handler) DeletePlugin(c *gin.Context) {
 		return
 	}
 	pluginsDir := normalizedPluginsDir(h.cfg.Plugins.Dir)
-	item, configured := h.cfg.Plugins.Configs[id]
+	_, configured := h.cfg.Plugins.Configs[id]
 	host := h.pluginHost
 	h.mu.Unlock()
 
@@ -358,11 +358,7 @@ func (h *Handler) DeletePlugin(c *gin.Context) {
 		return
 	}
 	pluginsDir = resolvedPluginsDir
-	var desiredVersions map[string]string
-	if configured {
-		desiredVersions = pluginStoreDesiredVersions(map[string]config.PluginInstanceConfig{id: item})
-	}
-	path, errPath := pluginFilePath(pluginsDir, id, desiredVersions)
+	path, errPath := pluginFilePath(pluginsDir, id)
 	if errPath != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "plugin_discovery_failed", "message": errPath.Error()})
 		return
@@ -748,4 +744,11 @@ func cloneYAMLNode(node *yaml.Node) *yaml.Node {
 		}
 	}
 	return &out
+}
+
+func pluginBusy(host *pluginhost.Host, id string) bool {
+	if host == nil {
+		return false
+	}
+	return host.PluginBusy(id)
 }

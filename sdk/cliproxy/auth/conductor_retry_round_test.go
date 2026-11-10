@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -366,7 +365,7 @@ func (d *retryRoundHomeDispatcher) RPopAuthWithRetryRoundConstraints(_ context.C
 			Auth:         Auth{ID: id, Provider: "retry-round-home", Status: StatusActive, Metadata: map[string]any{"request_retry": d.limits[id]}},
 		})
 	}
-	return nil, home.ErrAuthNotFound
+	return nil, ErrHomeAuthNotFound
 }
 
 func (*retryRoundHomeDispatcher) AbortAmbiguousDispatch() {}

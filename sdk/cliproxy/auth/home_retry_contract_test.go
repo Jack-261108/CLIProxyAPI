@@ -13,7 +13,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -143,7 +142,7 @@ func (d *retryRoundSelectionFailureDispatcher) RPopAuth(ctx context.Context, mod
 func (d *retryRoundSelectionFailureDispatcher) RPopAuthWithRetryRoundConstraints(_ context.Context, _ string, _ string, _ http.Header, _ int, retryRound int, excludedAuthIDs []string, _ string) ([]byte, error) {
 	if retryRound == 0 {
 		if len(excludedAuthIDs) > 0 {
-			return nil, home.ErrAuthNotFound
+			return nil, ErrHomeAuthNotFound
 		}
 		return json.Marshal(homeAuthDispatchResponse{Auth: Auth{
 			ID:       "home-retry-a",
@@ -228,7 +227,7 @@ func (d *retryContractHomeDispatcher) RPopAuthWithConstraints(_ context.Context,
 	if d.exhaustedErr != nil {
 		return nil, d.exhaustedErr
 	}
-	return nil, home.ErrAuthNotFound
+	return nil, ErrHomeAuthNotFound
 }
 
 func (*retryContractHomeDispatcher) AbortAmbiguousDispatch() {}

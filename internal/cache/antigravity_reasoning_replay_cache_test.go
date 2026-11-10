@@ -10,7 +10,6 @@ import (
 
 	"github.com/MoeForge/moego/base64"
 	"github.com/MoeForge/moego/ojson"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 )
 
 type fakeAntigravityReasoningReplayKVClient struct {
@@ -31,7 +30,7 @@ func (c *fakeAntigravityReasoningReplayKVClient) KVGet(_ context.Context, key st
 	return append([]byte(nil), value...), ok, nil
 }
 
-func (c *fakeAntigravityReasoningReplayKVClient) KVSet(_ context.Context, key string, value []byte, _ homekv.KVSetOptions) (bool, error) {
+func (c *fakeAntigravityReasoningReplayKVClient) KVSet(_ context.Context, key string, value []byte, _ KVSetOptions) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.values[key] = append([]byte(nil), value...)

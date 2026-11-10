@@ -7,13 +7,11 @@ import (
 	"testing"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 )
 
 func TestServiceApplyKVStoreConfig_LifecycleAndHotReload(t *testing.T) {
 	t.Cleanup(func() {
-		home.ClearCurrent()
 		_ = kvstore.ShutdownLocal()
 	})
 
@@ -114,54 +112,5 @@ func TestServiceApplyKVStoreConfig_LifecycleAndHotReload(t *testing.T) {
 	})
 	if errNilShutdown := nilSvc.shutdownKVStore(); errNilShutdown != nil {
 		t.Fatalf("nilSvc.shutdownKVStore() error = %v; want nil", errNilShutdown)
-	}
-}
-
-func TestServiceApplyKVStoreConfig_HomeModeNeverOpensBBolt(t *testing.T) {
-	t.Cleanup(func() {
-		home.ClearCurrent()
-		_ = kvstore.ShutdownLocal()
-	})
-
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "home-should-not-create.db")
-	cfg := &config.Config{
-		Home:    config.HomeConfig{Enabled: true},
-		KVStore: config.KVStoreConfig{Disabled: false, Path: dbPath},
-	}
-	forceHomeRuntimeConfig(cfg)
-	if !cfg.KVStore.Disabled {
-		t.Fatal("forceHomeRuntimeConfig did not set KVStore.Disabled = true")
-	}
-
-	svc := &Service{}
-	svc.applyKVStoreConfig(&config.Config{
-		Home:    config.HomeConfig{Enabled: true},
-		KVStore: config.KVStoreConfig{Disabled: false, Path: dbPath},
-	})
-	if _, errStat := os.Stat(dbPath); !os.IsNotExist(errStat) {
-		t.Fatalf("Home mode created bbolt file at %s (err=%v)", dbPath, errStat)
-	}
-
-	// Active home.Current() must also isolate and shut down any local bbolt store even if Home.Enabled is false.
-	localBeforeHomePath := filepath.Join(dir, "local-before-home.db")
-	svc.applyKVStoreConfig(&config.Config{
-		KVStore: config.KVStoreConfig{Disabled: false, Path: localBeforeHomePath},
-	})
-	if client, active, errClient := kvstore.CurrentKVClient(); errClient != nil || !active || client == nil {
-		t.Fatalf("expected local store active before Home activation, got %v, %v, %v", client, active, errClient)
-	}
-
-	homeActivePath := filepath.Join(dir, "home-active-should-not-create.db")
-	home.SetCurrent(&home.Client{})
-	svc.applyKVStoreConfig(&config.Config{
-		KVStore: config.KVStoreConfig{Disabled: false, Path: homeActivePath},
-	})
-	if _, errStat := os.Stat(homeActivePath); !os.IsNotExist(errStat) {
-		t.Fatalf("active home.Current() created bbolt file at %s (err=%v)", homeActivePath, errStat)
-	}
-	home.ClearCurrent()
-	if client, active, errClient := kvstore.CurrentKVClient(); client != nil || active || errClient != nil {
-		t.Fatalf("expected local store shut down when home.Current() was active, got %v, %v, %v", client, active, errClient)
 	}
 }

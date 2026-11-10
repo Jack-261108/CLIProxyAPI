@@ -11,7 +11,6 @@ import (
 	"time"
 
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	internallogging "github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -498,7 +497,7 @@ func (d *lifecycleRetryDispatcher) RPopAuth(ctx context.Context, model string, s
 func (d *lifecycleRetryDispatcher) RPopAuthWithConstraints(_ context.Context, _ string, _ string, _ http.Header, _ int, excludedAuthIDs []string, _ string) ([]byte, error) {
 	for _, authID := range excludedAuthIDs {
 		if authID == "home-auth" {
-			return nil, home.ErrAuthNotFound
+			return nil, ErrHomeAuthNotFound
 		}
 	}
 	if d.calls.Add(1) == 2 && d.executor.first != nil {
@@ -618,7 +617,7 @@ func (d *freshHomeStreamSelectionDispatcher) RPopAuthWithConstraints(_ context.C
 			},
 		}})
 	}
-	return nil, home.ErrAuthNotFound
+	return nil, ErrHomeAuthNotFound
 }
 
 func (*freshHomeStreamSelectionDispatcher) AbortAmbiguousDispatch() {}
@@ -819,7 +818,7 @@ func (d *homePerSelectionDispatcher) RPopAuth(context.Context, string, string, h
 		d.firstEndedBefore2.Store(!d.first.Active())
 	}
 	if int(call) > len(d.auths) {
-		return nil, home.ErrAuthNotFound
+		return nil, ErrHomeAuthNotFound
 	}
 	return json.Marshal(homeAuthDispatchResponse{Auth: d.auths[call-1]})
 }
@@ -957,7 +956,7 @@ func (*accountedHomeExecutionDispatcher) HeartbeatOK() bool { return true }
 func (d *accountedHomeExecutionDispatcher) RPopAuth(_ context.Context, model string, _ string, _ http.Header, _ int) ([]byte, error) {
 	index := int(d.calls.Add(1)) - 1
 	if index >= len(d.auths) {
-		return nil, home.ErrAuthNotFound
+		return nil, ErrHomeAuthNotFound
 	}
 	auth := d.auths[index]
 	return json.Marshal(struct {

@@ -10,8 +10,6 @@ import (
 
 	"github.com/MoeForge/moego/ojson"
 	internalcache "github.com/router-for-me/CLIProxyAPI/v8/internal/cache"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	homekv "github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/runtime/executor/helps"
 	internalsignature "github.com/router-for-me/CLIProxyAPI/v8/internal/signature"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
@@ -59,8 +57,6 @@ func TestPrepareAntigravityGeminiReasoningReplayPayloadToleratesHomeKVFailure(t 
 	// replay cache — including the "unknown command 'cas'" case from an older
 	// Home. The request must proceed without replay rather than fail, because a
 	// bare executor error would make MarkResult mark the credential unavailable.
-	homekv.SetCurrent(homekv.New(config.HomeConfig{Enabled: true}))
-	t.Cleanup(func() { homekv.SetCurrent(nil) })
 
 	payload := []byte(`{"sessionId":"kv-failure","request":{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}}`)
 	out, _, errPrepare := prepareAntigravityGeminiReasoningReplayPayload(context.Background(), "gemini-3-flash-agent", cliproxyexecutor.Request{}, cliproxyexecutor.Options{}, payload)
