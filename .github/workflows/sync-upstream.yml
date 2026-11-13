@@ -2,7 +2,10 @@ name: Sync Upstream
 
 # 定时检查官方 router-for-me/CLIProxyAPI 的最新稳定版本，
 # 合并到本仓库 main 后打同名 tag，由 release.yaml 构建发布。
-# 合并冲突时中止本次同步并创建 issue，同时按需发送 Telegram 通知，不自动发布。
+# 本仓库已移除的模块目录（PRUNED_MODULES）在合并后会被自动裁剪，
+# 避免上游持续修改这些文件导致 modify/delete 冲突。
+# 其余冲突、或裁剪后编译不通过时，中止本次同步并创建 issue，
+# 同时按需发送 Telegram 通知，不自动发布。
 # Telegram 通知需要配置仓库 secrets：TELEGRAM_BOT_TOKEN、TELEGRAM_CHAT_ID；
 # 未配置时自动跳过。
 
@@ -22,6 +25,9 @@ concurrency:
 
 env:
   UPSTREAM_REPO: router-for-me/CLIProxyAPI
+  # Module trees this repository has intentionally removed. Upstream keeps
+  # modifying them, so every sync would otherwise hit modify/delete conflicts.
+  PRUNED_MODULES: internal/tui internal/home internal/homeplugins internal/pluginstore
 
 jobs:
   sync:
@@ -36,6 +42,12 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: 配置 Git 身份
         run: |
@@ -88,42 +100,97 @@ jobs:
           git fetch --no-tags "https://github.com/${UPSTREAM_REPO}.git" \
             "refs/tags/${TAG}:refs/tags/upstream-${TAG}"
 
-          if git merge --no-edit "upstream-${TAG}"; then
-            echo "合并 ${TAG} 成功" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
+          # Abort any half-finished merge before reporting, then create the tracking
+          # issue and notify Telegram. Nothing is ever pushed from this path.
+          fail_sync() {
+            local title="$1"
+            local details="$2"
+            git merge --abort >/dev/null 2>&1 || true
+            {
+              echo "## ${title}"
+              echo
+              echo "同步 \`${TAG}\` 已中止，未推送任何改动。"
+              echo
+              echo "已自动裁剪的已移除模块：${pruned:-无}"
+              echo
+              printf '%s\n' "$details"
+              echo
+              echo "处理方式：本地执行 \`git fetch https://github.com/${UPSTREAM_REPO}.git refs/tags/${TAG}:refs/tags/upstream-${TAG}\` 后手动 \`git merge upstream-${TAG}\` 解决并推送，再手动运行本工作流。"
+            } > /tmp/issue-body.md
+            local issue_url
+            issue_url="$(gh issue create -R "${GITHUB_REPOSITORY}" \
+              --title "$title" \
+              --body-file /tmp/issue-body.md)"
 
-          git merge --abort || true
-          {
-            echo "## 上游 ${TAG} 同步冲突"
-            echo
-            echo "自动合并 \`${TAG}\` 时产生冲突，本次同步已中止，未推送任何改动。"
-            echo
-            echo "常见原因：上游修改了本仓库已移除的下游响应压缩相关文件。"
-            echo
-            echo "处理方式：本地执行 \`git fetch https://github.com/${UPSTREAM_REPO}.git refs/tags/${TAG}:refs/tags/upstream-${TAG}\` 后手动 \`git merge upstream-${TAG}\` 解决冲突并推送，再手动运行本工作流。"
-          } > /tmp/issue-body.md
-          issue_url="$(gh issue create -R "${GITHUB_REPOSITORY}" \
-            --title "上游 ${TAG} 自动同步冲突" \
-            --body-file /tmp/issue-body.md)"
-
-          if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
-            message="$(printf '%s\n' \
-              "上游 ${TAG} 自动同步冲突" \
-              "仓库: ${GITHUB_REPOSITORY}" \
-              "Issue: ${issue_url}" \
-              "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
-            if ! curl -fsS --retry 3 --max-time 15 \
-              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-              --data-urlencode "text=${message}" \
-              --data-urlencode "disable_web_page_preview=true" >/dev/null; then
-              echo "::warning::Telegram 通知发送失败"
+            if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+              local message
+              message="$(printf '%s\n' \
+                "$title" \
+                "仓库: ${GITHUB_REPOSITORY}" \
+                "Issue: ${issue_url}" \
+                "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
+              if ! curl -fsS --retry 3 --max-time 15 \
+                "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+                --data-urlencode "text=${message}" \
+                --data-urlencode "disable_web_page_preview=true" >/dev/null; then
+                echo "::warning::Telegram 通知发送失败"
+              fi
+            else
+              echo "未配置 TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID，跳过 Telegram 通知"
             fi
-          else
-            echo "未配置 TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID，跳过 Telegram 通知"
+            exit 1
+          }
+
+          # Stop before committing so a failed verification can be rolled back with
+          # a plain merge --abort.
+          merge_status=0
+          git merge --no-ff --no-commit --no-edit "upstream-${TAG}" || merge_status=$?
+
+          if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+            if [[ $merge_status -eq 0 ]]; then
+              # Already up to date: a previous run pushed but never published the tag.
+              echo "main 已包含 ${TAG}，继续打 tag 发布" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            fail_sync "上游 ${TAG} 自动同步失败（git merge 退出码 ${merge_status}）" \
+              "git merge 未能启动合并，通常是有未跟踪文件与上游新增文件冲突。"
           fi
-          exit 1
+
+          # Always re-prune: upstream may resurrect a removed module with brand-new
+          # files, which merges cleanly and would otherwise leak back into the tree.
+          pruned=""
+          for module in ${PRUNED_MODULES}; do
+            if [[ -n "$(git ls-files -- "$module")" ]]; then
+              git rm -r -q --force "$module"
+              pruned="${pruned}${module} "
+            fi
+          done
+
+          remaining="$(git diff --name-only --diff-filter=U)"
+          if [[ -n "$remaining" ]]; then
+            details="以下文件需要人工解决冲突："$'\n\n'
+            details+="$(printf '%s\n' "$remaining" | awk '{print "- `" $0 "`"}')"
+            fail_sync "上游 ${TAG} 自动同步冲突" "$details"
+          fi
+
+          # A clean merge is not proof of a working tree: tests in surviving packages
+          # may still reference the pruned modules, and upstream may break the build.
+          if ! go build ./... > /tmp/go-build.log 2>&1; then
+            details="合并结果无法编译："$'\n\n```\n'"$(tail -n 40 /tmp/go-build.log)"$'\n```'
+            fail_sync "上游 ${TAG} 自动同步构建失败" "$details"
+          fi
+          if ! go test -run '^$' ./... > /tmp/go-testcompile.log 2>&1; then
+            details="合并结果中的测试代码无法编译（常见原因：仍在引用已移除模块的测试）："$'\n\n```\n'
+            details+="$(tail -n 40 /tmp/go-testcompile.log)"$'\n```'
+            fail_sync "上游 ${TAG} 自动同步测试编译失败" "$details"
+          fi
+
+          git commit --no-edit
+          echo "合并 ${TAG} 成功" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$pruned" ]]; then
+            echo "已自动裁剪已移除模块：${pruned}" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: 推送 main 并打 tag
         if: steps.gate.outputs.run == 'true'
