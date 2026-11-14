@@ -14,6 +14,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/api/middleware"
 	codexlive "github.com/router-for-me/CLIProxyAPI/v8/internal/client/codex/live"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/client/grokbuild"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/client/musecode"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
@@ -53,6 +54,8 @@ func (s *Server) setupRoutes() {
 	openaiResponsesHandlers := openai.NewOpenAIResponsesAPIHandler(s.handlers)
 	openaiResponsesHandlers.AccessManager = s.accessManager
 	s.codexLiveHandler = codexlive.NewHandler(s.handlers.AuthManager, s.cfg)
+	s.museCodeHandler = musecode.NewHandler(s.handlers.AuthManager, s.cfg)
+	s.museCodeHandler.SetModelListHooks(nil, s.writeModelListResponse)
 
 	// OpenAI compatible API routes
 	v1 := s.engine.Group("/v1")
@@ -122,6 +125,16 @@ func (s *Server) setupRoutes() {
 		codexDirect.POST("/responses", openaiResponsesHandlers.Responses)
 		codexDirect.POST("/responses/compact", openaiResponsesHandlers.Compact)
 		codexDirect.POST("/alpha/search", s.codexAlphaSearch)
+	}
+
+	// Muse Code CLI direct endpoints (beside /v1)
+	museCode := s.engine.Group("/muse-code")
+	museCode.Use(AuthMiddleware(s.accessManager))
+	{
+		museCode.GET("/models", s.museCodeHandler.HandleModels)
+		museCode.GET("/config", s.museCodeHandler.Handle)
+		museCode.POST("/search", s.museCodeHandler.Handle)
+		museCode.POST("/browser_open", s.museCodeHandler.Handle)
 	}
 
 	// Gemini compatible API routes
