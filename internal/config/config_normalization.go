@@ -1,11 +1,11 @@
 package config
 
 import (
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/MoeForge/moego/regexp"
 	log "github.com/sirupsen/logrus"
 )
 

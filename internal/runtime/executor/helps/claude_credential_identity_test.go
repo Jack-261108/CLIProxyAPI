@@ -3,13 +3,13 @@ package helps
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/MoeForge/moego/json"
 	"github.com/MoeForge/moego/ojson"
 	claudeauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/claude"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"

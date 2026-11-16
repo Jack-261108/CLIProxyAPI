@@ -2,7 +2,6 @@ package executor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MoeForge/moego/json"
 	internalcache "github.com/router-for-me/CLIProxyAPI/v8/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"

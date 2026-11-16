@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -10,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MoeForge/moego/json"
 	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	internallogging "github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executionregistry"

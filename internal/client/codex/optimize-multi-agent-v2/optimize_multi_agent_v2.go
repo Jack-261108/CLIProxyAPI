@@ -3,13 +3,13 @@ package multiagentv2
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/MoeForge/moego/json"
 	"github.com/MoeForge/moego/ojson"
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
