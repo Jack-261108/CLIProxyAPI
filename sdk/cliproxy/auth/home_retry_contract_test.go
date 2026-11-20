@@ -24,6 +24,7 @@ type retryContractHomeDispatcher struct {
 	excluded         [][]string
 	metadata         map[string]any
 	requestRetry     *int
+	selectionID      string
 	websocket        bool
 	exhaustedPayload []byte
 	exhaustedErr     error
@@ -212,6 +213,7 @@ func (d *retryContractHomeDispatcher) RPopAuthWithConstraints(_ context.Context,
 		}
 		return json.Marshal(homeAuthDispatchResponse{
 			RequestRetry: d.requestRetry,
+			SelectionID:  d.selectionID,
 			Auth: Auth{
 				ID:         authID,
 				Provider:   "home-retry-contract",

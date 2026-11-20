@@ -35,6 +35,31 @@ var (
 	ErrHomeNotConnected = errors.New("home not connected")
 )
 
+// HomeSchedulerContext contains only transport-safe request identity, never policy overrides.
+type HomeSchedulerContext struct {
+	Stream             bool   `json:"stream,omitempty"`
+	RequestID          string `json:"request_id,omitempty"`
+	TraceID            string `json:"trace_id,omitempty"`
+	ExecutionSessionID string `json:"execution_session_id,omitempty"`
+	RequestedModel     string `json:"requested_model,omitempty"`
+}
+
+type homeSchedulerContextKey struct{}
+
+// WithHomeSchedulerContext carries request-scoped scheduling inputs through legacy dispatcher interfaces.
+func WithHomeSchedulerContext(ctx context.Context, input HomeSchedulerContext) context.Context {
+	return context.WithValue(ctx, homeSchedulerContextKey{}, input)
+}
+
+// HomeSchedulerContextFromContext retrieves HomeSchedulerContext from context.
+func HomeSchedulerContextFromContext(ctx context.Context) (HomeSchedulerContext, bool) {
+	if ctx == nil {
+		return HomeSchedulerContext{}, false
+	}
+	input, ok := ctx.Value(homeSchedulerContextKey{}).(HomeSchedulerContext)
+	return input, ok
+}
+
 type ambiguousDispatchErr struct {
 	error
 }
@@ -196,6 +221,7 @@ func markHomeRetryRoundExhausted(err error, retryAfter *time.Duration, retryNow 
 		return nil
 	}
 	upstreamAttempt := hasUpstreamExecutionAttempt(err)
+	upstreamProvider := upstreamAttemptProviderFromError(err)
 	err = unwrapUpstreamExecutionAttempt(err)
 	marked := &homeRetryRoundExhaustedError{cause: err, retryNow: retryNow}
 	if retryAfter != nil {
@@ -203,7 +229,7 @@ func markHomeRetryRoundExhausted(err error, retryAfter *time.Duration, retryNow 
 		marked.hasRetryAfter = true
 	}
 	if upstreamAttempt {
-		return markUpstreamExecutionAttempt(marked)
+		return markUpstreamExecutionAttemptWithProvider(marked, upstreamProvider)
 	}
 	return marked
 }
@@ -319,7 +345,7 @@ func shouldReturnLastErrorOnPickFailure(homeMode bool, lastErr error, errPick er
 	if !homeMode {
 		return true
 	}
-	if isHomeRequestRetryExceededError(errPick) {
+	if isSchedulerRejectError(errPick) || isHomeRequestRetryExceededError(errPick) {
 		return true
 	}
 	var authErr *Error
@@ -376,6 +402,7 @@ func repeatedHomeAuthError() *Error {
 }
 
 type homeAuthDispatchResponse struct {
+	SelectionID   string                 `json:"selection_id,omitempty"`
 	Model         string                 `json:"model"`
 	Provider      string                 `json:"provider"`
 	AuthIndex     string                 `json:"auth_index"`
@@ -1120,6 +1147,19 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
 			dispatchHeaders.Set("X-Node-Kind", nodeKind)
 		}
 	}
+	requestID := stringMetadataValue(opts.Metadata, cliproxyexecutor.RequestIDMetadataKey)
+	if requestID == "" {
+		requestID = logging.GetRequestID(ctx)
+	}
+	traceID := stringMetadataValue(opts.Metadata, cliproxyexecutor.TraceIDMetadataKey)
+	if traceID == "" {
+		traceID = coreusage.TraceIDFromContext(ctx)
+	}
+	ctx = WithHomeSchedulerContext(ctx, HomeSchedulerContext{
+		Stream: opts.Stream, RequestID: requestID, TraceID: traceID,
+		ExecutionSessionID: homeExecutionSessionIDFromMetadata(opts.Metadata),
+		RequestedModel:     stringMetadataValue(opts.Metadata, cliproxyexecutor.RequestedModelMetadataKey),
+	})
 	credentialPolicy := credentialPolicyFromContext(ctx)
 	var raw []byte
 	var errRPop error
@@ -1324,6 +1364,7 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
 			return nil, errEnd
 		}
 	}
+	selection.SelectionID = strings.TrimSpace(dispatch.SelectionID)
 	selection.CanonicalSessionID = sessionID
 	selection.ParentSessionID = parentSessionID
 	return selection, nil
