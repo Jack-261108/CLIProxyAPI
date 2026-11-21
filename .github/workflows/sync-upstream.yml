@@ -27,7 +27,7 @@ env:
   UPSTREAM_REPO: router-for-me/CLIProxyAPI
   # Module trees this repository has intentionally removed. Upstream keeps
   # modifying them, so every sync would otherwise hit modify/delete conflicts.
-  PRUNED_MODULES: internal/tui internal/home internal/homeplugins internal/pluginstore
+  PRUNED_MODULES: internal/tui internal/home internal/homeplugins internal/pluginstore sdk/pluginstore
 
 jobs:
   sync:
@@ -174,15 +174,30 @@ jobs:
             fail_sync "上游 ${TAG} 自动同步冲突" "$details"
           fi
 
+          # Full logs are dominated by "ok ... [no tests to run]" lines, so the error
+          # that actually broke the build is usually near the top. Print the error
+          # lines themselves, falling back to the tail when nothing matches.
+          log_excerpt() {
+            local log="$1"
+            local errs
+            errs="$(grep -nE '\.go:[0-9]+:|no required module provides|cannot find package|undefined:|^--- FAIL|^FAIL[[:space:]]' "$log" | head -n 30 || true)"
+            if [[ -n "$errs" ]]; then
+              printf '%s\n' "$errs"
+            else
+              tail -n 40 "$log"
+            fi
+          }
+
           # A clean merge is not proof of a working tree: tests in surviving packages
           # may still reference the pruned modules, and upstream may break the build.
           if ! go build ./... > /tmp/go-build.log 2>&1; then
-            details="合并结果无法编译："$'\n\n```\n'"$(tail -n 40 /tmp/go-build.log)"$'\n```'
+            details="合并结果无法编译："$'\n\n```\n'"$(log_excerpt /tmp/go-build.log)"$'\n```'
             fail_sync "上游 ${TAG} 自动同步构建失败" "$details"
           fi
           if ! go test -run '^$' ./... > /tmp/go-testcompile.log 2>&1; then
             details="合并结果中的测试代码无法编译（常见原因：仍在引用已移除模块的测试）："$'\n\n```\n'
-            details+="$(tail -n 40 /tmp/go-testcompile.log)"$'\n```'
+            details+="$(log_excerpt /tmp/go-testcompile.log)"
+            details+=$'\n```'
             fail_sync "上游 ${TAG} 自动同步测试编译失败" "$details"
           fi
 
