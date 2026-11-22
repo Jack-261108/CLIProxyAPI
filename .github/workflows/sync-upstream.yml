@@ -213,10 +213,33 @@ jobs:
           TAG: ${{ steps.upstream.outputs.tag }}
         run: |
           set -euo pipefail
-          git push origin HEAD:main
+          # GitHub 偶发返回服务端错误（fatal error in commit_refs_rules、Internal Server
+          # Error、5xx），同一条推送稍后重试通常就成功；策略性拒绝（分支保护、必须签名、
+          # non-fast-forward）重试也不会变，因此只对服务端错误做有界重试，其余立即失败。
+          push_retry() {
+            local attempt log="/tmp/push-retry.log"
+            for attempt in 1 2 3 4; do
+              if git "$@" > "$log" 2>&1; then
+                cat "$log"
+                return 0
+              fi
+              cat "$log" >&2
+              if ! grep -qiE 'commit_refs_rules|internal server error|http 5[0-9]{2}|rpc failed|remote end hung up|connection (reset|timed out)' "$log"; then
+                return 1
+              fi
+              if [[ $attempt -eq 4 ]]; then
+                echo "::error::推送连续 ${attempt} 次被服务端拒绝，疑似持续故障，不再重试"
+                return 1
+              fi
+              echo "::warning::服务端瞬时拒绝，$((attempt * 10)) 秒后重试（第 ${attempt}/4 次）"
+              sleep $((attempt * 10))
+            done
+          }
+
+          push_retry push origin HEAD:main
           # 本地可能已存在同名的官方 tag，强制指向本仓库的合并结果
           git tag -f "$TAG" HEAD
-          git push -f origin "refs/tags/${TAG}"
+          push_retry push -f origin "refs/tags/${TAG}"
           echo "已推送 tag ${TAG}" >> "$GITHUB_STEP_SUMMARY"
 
   # GITHUB_TOKEN 推送的 tag 不会触发新的 workflow 运行，
