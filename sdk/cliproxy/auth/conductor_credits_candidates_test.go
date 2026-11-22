@@ -5,10 +5,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 )
 
 func TestFindAllAntigravityCreditsCandidateAuths_PrefersKnownCreditsThenUnknown(t *testing.T) {
+	reg := registry.GetGlobalRegistry()
+	models := []*registry.ModelInfo{{ID: "claude-sonnet-4-6"}, {ID: "gemini-3-flash"}}
+	for _, id := range []string{"zz-credits", "aa-unknown", "mm-no"} {
+		reg.RegisterClient(id, "antigravity", models)
+		t.Cleanup(func() { reg.UnregisterClient(id) })
+	}
+
 	m := &Manager{
 		auths: map[string]*Auth{
 			"zz-credits": {ID: "zz-credits", Provider: "antigravity"},

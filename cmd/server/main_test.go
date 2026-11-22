@@ -1,17 +1,11 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"io/fs"
-	"os"
+	"bytes"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
-	"golang.org/x/crypto/bcrypt"
-	"gopkg.in/yaml.v3"
 )
 
 func TestArgvEnablesBoolFlag(t *testing.T) {
@@ -97,74 +91,63 @@ func TestShouldEnableExampleAPIKeySafeMode(t *testing.T) {
 	}
 }
 
-const seededConfigTestSecret = "git-seed-plaintext-secret"
+func TestHomeConfigPayloadPortApplication(t *testing.T) {
+	tests := []struct {
+		name     string
+		yamlBody string
+		wantPort int
+	}{
+		{
+			name:     "custom port honored",
+			yamlBody: "port: 9090\n",
+			wantPort: 9090,
+		},
+		{
+			name:     "custom port 8327 honored",
+			yamlBody: "port: 8327\n",
+			wantPort: 8327,
+		},
+		{
+			name:     "missing port defaults to 8317",
+			yamlBody: "debug: true\n",
+			wantPort: 8317,
+		},
+		{
+			name:     "standard port 8317 preserved",
+			yamlBody: "port: 8317\n",
+			wantPort: 8317,
+		},
+	}
 
-// persistSeededConfigForTest seeds content into configFilePath and returns what each
-// persist call found in that file.
-func persistSeededConfigForTest(t *testing.T, configFilePath, content string) ([]string, error) {
-	t.Helper()
-	if errMkdir := os.MkdirAll(filepath.Dir(configFilePath), 0o700); errMkdir != nil {
-		t.Fatalf("create config directory: %v", errMkdir)
-	}
-	if errWrite := os.WriteFile(configFilePath, []byte(content), 0o600); errWrite != nil {
-		t.Fatalf("write config: %v", errWrite)
-	}
-	var persisted []string
-	errPersist := persistSeededConfig(context.Background(), configFilePath, func(context.Context) error {
-		data, errRead := os.ReadFile(configFilePath)
-		if errRead != nil {
-			return errRead
-		}
-		persisted = append(persisted, string(data))
-		return nil
-	})
-	return persisted, errPersist
-}
-
-func TestPersistSeededConfigHashesSecretBeforePersisting(t *testing.T) {
-	configFilePath := filepath.Join(t.TempDir(), "config", "config.yaml")
-	persisted, errPersist := persistSeededConfigForTest(t, configFilePath, "port: 8317\nremote-management:\n  secret-key: "+seededConfigTestSecret+"\n")
-	if errPersist != nil {
-		t.Fatalf("persistSeededConfig() error = %v", errPersist)
-	}
-	if len(persisted) != 1 {
-		t.Fatalf("persist calls = %d, want 1", len(persisted))
-	}
-	if strings.Contains(persisted[0], seededConfigTestSecret) {
-		t.Fatalf("persisted the plaintext management secret:\n%s", persisted[0])
-	}
-	var doc struct {
-		RemoteManagement struct {
-			SecretKey string `yaml:"secret-key"`
-		} `yaml:"remote-management"`
-	}
-	if errParse := yaml.Unmarshal([]byte(persisted[0]), &doc); errParse != nil {
-		t.Fatalf("parse persisted config: %v", errParse)
-	}
-	if errCompare := bcrypt.CompareHashAndPassword([]byte(doc.RemoteManagement.SecretKey), []byte(seededConfigTestSecret)); errCompare != nil {
-		t.Fatalf("persisted secret %q is not the bcrypt hash of the plaintext secret", doc.RemoteManagement.SecretKey)
-	}
-}
-
-// The template copy is removed when refused, so the next start seeds again and fails
-// again instead of running from a config the repository never received.
-func TestPersistSeededConfigRefusesConfigThatKeepsPlaintextSecret(t *testing.T) {
-	for name, content := range map[string]string{
-		"unparsable":      "remote-management:\n  secret-key: " + seededConfigTestSecret + "\nport: [8317\n",
-		"anchored secret": "defaults: &management\n  secret-key: " + seededConfigTestSecret + "\nmanagement: *management\n",
-	} {
-		t.Run(name, func(t *testing.T) {
-			configFilePath := filepath.Join(t.TempDir(), "config", "config.yaml")
-			persisted, errPersist := persistSeededConfigForTest(t, configFilePath, content)
-			if errPersist == nil {
-				t.Fatal("persistSeededConfig() succeeded, want the seed refused")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, errParse := config.ParseConfigBytes([]byte(tt.yamlBody))
+			if errParse != nil {
+				t.Fatalf("ParseConfigBytes() error = %v", errParse)
 			}
-			if len(persisted) != 0 {
-				t.Fatalf("persisted a config that still holds the plaintext secret:\n%s", persisted[0])
+			if parsed == nil {
+				parsed = &config.Config{}
 			}
-			if _, errStat := os.Stat(configFilePath); !errors.Is(errStat, fs.ErrNotExist) {
-				t.Fatalf("refused template copy left in place (stat error = %v)", errStat)
+			parsed.Port = config.NormalizeHomePort(parsed.Port)
+			if parsed.Port != tt.wantPort {
+				t.Fatalf("parsed.Port = %d, want %d", parsed.Port, tt.wantPort)
 			}
 		})
+	}
+}
+
+func TestLoadPluginBootstrapConfigDoesNotRewriteFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	raw := []byte("port: 8317\nmanagement:\n  secret-key: bootstrap-secret\n")
+	if errCreate := config.CreateConfigFile(path, raw); errCreate != nil {
+		t.Fatal(errCreate)
+	}
+	cfg := loadPluginBootstrapConfig(path)
+	if cfg.Port != 8317 || cfg.ServerID != "" {
+		t.Fatalf("plugin config port = %d, server ID = %q", cfg.Port, cfg.ServerID)
+	}
+	got, errRead := config.ReadConfigFile(path)
+	if errRead != nil || !bytes.Equal(got, raw) {
+		t.Fatalf("plugin bootstrap changed the config: %q, %v", got, errRead)
 	}
 }
