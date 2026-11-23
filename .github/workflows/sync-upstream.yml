@@ -100,6 +100,37 @@ jobs:
           git fetch --no-tags "https://github.com/${UPSTREAM_REPO}.git" \
             "refs/tags/${TAG}:refs/tags/upstream-${TAG}"
 
+          # Find an existing *open* issue with exactly this title. Returns the
+          # number on stdout, non-zero when there is none.
+          #
+          # Exact string comparison, not a search query: `gh issue list --search`
+          # matches loosely (substring, word-splitting, punctuation), so a title
+          # like "上游 v8.1.1 自动同步冲突" could match "上游 v8.1.10 自动同步冲突"
+          # and the new failure would be silently filed under the wrong issue.
+          # Read the raw list and compare in bash instead.
+          #
+          # The query itself is fail-OPEN on purpose: if the API call breaks, a
+          # missing issue is worse than a duplicate one — a duplicate is noise,
+          # but no issue means the failure has no record at all.
+          find_open_issue_by_title() {
+            local title="$1" num t url out
+            if ! out="$(gh issue list -R "${GITHUB_REPOSITORY}" \
+                          --state open --limit 200 \
+                          --json number,title \
+                          --jq '.[] | "\(.number)\t\(.title)"' 2>/tmp/gh-issue-list.err)"; then
+              echo "::warning::查询 open issue 失败，按「无同名 issue」继续创建：$(head -c 200 /tmp/gh-issue-list.err)" >&2
+              return 1
+            fi
+            while IFS=$'\t' read -r num t; do
+              [ -z "${num:-}" ] && continue
+              if [ "$t" = "$title" ]; then
+                printf '%s' "$num"
+                return 0
+              fi
+            done <<< "$out"
+            return 1
+          }
+
           # Abort any half-finished merge before reporting, then create the tracking
           # issue and notify Telegram. Nothing is ever pushed from this path.
           fail_sync() {
@@ -117,10 +148,24 @@ jobs:
               echo
               echo "处理方式：本地执行 \`git fetch https://github.com/${UPSTREAM_REPO}.git refs/tags/${TAG}:refs/tags/upstream-${TAG}\` 后手动 \`git merge upstream-${TAG}\` 解决并推送，再手动运行本工作流。"
             } > /tmp/issue-body.md
-            local issue_url
-            issue_url="$(gh issue create -R "${GITHUB_REPOSITORY}" \
-              --title "$title" \
-              --body-file /tmp/issue-body.md)"
+            # Re-use the open issue if this exact failure is already tracked.
+            # A cron retry, a re-dispatch, or a second run against the same tag
+            # would otherwise open one duplicate per attempt, and the resolver's
+            # "Closes #n" then has to close a growing pile of the same report.
+            local issue_url existing
+            if existing="$(find_open_issue_by_title "$title")"; then
+              issue_url="$(gh issue view "$existing" -R "${GITHUB_REPOSITORY}" --json url --jq .url)"
+              echo "已存在同名 open issue #${existing}，追加评论而不新建。"
+              if gh issue comment "$existing" -R "${GITHUB_REPOSITORY}" --body-file /tmp/issue-body.md >/dev/null; then
+                echo "已在 #${existing} 追加一条失败记录。"
+              else
+                echo "::warning::向 #${existing} 追加评论失败（issue 已存在，继续）"
+              fi
+            else
+              issue_url="$(gh issue create -R "${GITHUB_REPOSITORY}" \
+                --title "$title" \
+                --body-file /tmp/issue-body.md)"
+            fi
 
             if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
               local message
