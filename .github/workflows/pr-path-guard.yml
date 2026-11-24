@@ -20,9 +20,22 @@ jobs:
         with:
           files: |
             internal/translator/**
+      # Upstream sync PRs (auto-fix/*, sync/*) necessarily carry upstream's own
+      # internal/translator changes, so the guard is a structural false positive
+      # there. Regular PRs are still blocked.
       - name: Fail when restricted paths change
-        if: steps.changed-files.outputs.any_changed == 'true'
+        if: >-
+          steps.changed-files.outputs.any_changed == 'true' &&
+          !startsWith(github.head_ref, 'auto-fix/') &&
+          !startsWith(github.head_ref, 'sync/')
         run: |
           echo "Changes under internal/translator are not allowed in pull requests."
           echo "You need to create an issue for our maintenance team to make the necessary changes."
           exit 1
+      - name: Note skipped guard on upstream sync branch
+        if: >-
+          steps.changed-files.outputs.any_changed == 'true' &&
+          (startsWith(github.head_ref, 'auto-fix/') || startsWith(github.head_ref, 'sync/'))
+        run: |
+          echo "internal/translator changed on upstream sync branch '${GITHUB_HEAD_REF}'; guard skipped by design."
+          echo "### translator-path-guard: skipped for upstream sync branch" >> "$GITHUB_STEP_SUMMARY"
