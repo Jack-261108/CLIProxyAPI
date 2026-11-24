@@ -2,9 +2,13 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/kvstore"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
 )
@@ -98,5 +102,102 @@ func TestFindAllAntigravityCreditsCandidateAuths_PrefersKnownCreditsThenUnknown(
 	if afterExpiry[0].auth.ID != "zz-credits" || afterExpiry[1].auth.ID != "aa-unknown" || afterExpiry[2].auth.ID != "mm-no" {
 		t.Fatalf("afterExpiry order = [%s, %s, %s], want [zz-credits, aa-unknown, mm-no]",
 			afterExpiry[0].auth.ID, afterExpiry[1].auth.ID, afterExpiry[2].auth.ID)
+	}
+}
+func TestFindAllAntigravityCreditsCandidateAuths_ExcludesCredentialWideLockouts(t *testing.T) {
+	const model = "claude-sonnet-4-6"
+	reg := registry.GetGlobalRegistry()
+	future := time.Now().Add(30 * time.Minute)
+	auths := map[string]*Auth{
+		"ag-lockout-healthy": {
+			ID:       "ag-lockout-healthy",
+			Provider: "antigravity",
+			Status:   StatusActive,
+		},
+		"ag-lockout-credential": {
+			ID:                   "ag-lockout-credential",
+			Provider:             "antigravity",
+			Status:               StatusActive,
+			credentialRetryAfter: future,
+		},
+		"ag-lockout-nonauth": {
+			ID:                          "ag-lockout-nonauth",
+			Provider:                    "antigravity",
+			Status:                      StatusActive,
+			nonAuthCredentialRetryAfter: future,
+		},
+		"ag-lockout-signin": {
+			ID:             "ag-lockout-signin",
+			Provider:       "antigravity",
+			Status:         StatusActive,
+			RequiresSignIn: true,
+		},
+		"ag-lockout-expired": {
+			ID:                          "ag-lockout-expired",
+			Provider:                    "antigravity",
+			Status:                      StatusActive,
+			credentialRetryAfter:        time.Now().Add(-time.Minute),
+			nonAuthCredentialRetryAfter: time.Now().Add(-time.Minute),
+		},
+	}
+	for id := range auths {
+		reg.RegisterClient(id, "antigravity", []*registry.ModelInfo{{ID: model}})
+		t.Cleanup(func() { reg.UnregisterClient(id) })
+	}
+
+	m := &Manager{
+		auths: auths,
+		executors: map[string]ProviderExecutor{
+			"antigravity": schedulerTestExecutor{},
+		},
+	}
+
+	candidates, errCandidates := m.findAllAntigravityCreditsCandidateAuths(context.Background(), model, cliproxyexecutor.Options{})
+	if errCandidates != nil {
+		t.Fatalf("findAllAntigravityCreditsCandidateAuths() error = %v", errCandidates)
+	}
+	got := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		got = append(got, candidate.auth.ID)
+	}
+	want := []string{"ag-lockout-expired", "ag-lockout-healthy"}
+	if len(got) != len(want) {
+		t.Fatalf("candidate ids = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("candidate ids = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestFindAllAntigravityCreditsCandidateAuths_HomeKVUnavailableReturnsError(t *testing.T) {
+	errKV := errors.New("home kv store unavailable")
+	kvstore.RegisterHomeProvider(func() (kvstore.KVClient, bool, error) {
+		return nil, true, errKV
+	})
+	t.Cleanup(func() { kvstore.RegisterHomeProvider(nil) })
+	reg := registry.GetGlobalRegistry()
+	reg.RegisterClient("ag-home-kv", "antigravity", []*registry.ModelInfo{{ID: "claude-sonnet-4-6"}})
+	t.Cleanup(func() { reg.UnregisterClient("ag-home-kv") })
+
+	m := &Manager{
+		auths: map[string]*Auth{
+			"ag-home-kv": {ID: "ag-home-kv", Provider: "antigravity"},
+		},
+		executors: map[string]ProviderExecutor{
+			"antigravity": schedulerTestExecutor{},
+		},
+	}
+
+	candidates, errCandidates := m.findAllAntigravityCreditsCandidateAuths(context.Background(), "claude-sonnet-4-6", cliproxyexecutor.Options{})
+	if errCandidates == nil {
+		t.Fatalf("findAllAntigravityCreditsCandidateAuths() error = nil, candidates=%#v", candidates)
+	}
+	if status := statusCodeFromError(errCandidates); status != http.StatusServiceUnavailable {
+		t.Fatalf("statusCodeFromError() = %d, want %d; err=%v", status, http.StatusServiceUnavailable, errCandidates)
+	}
+	if !strings.Contains(errCandidates.Error(), "home kv store unavailable") {
+		t.Fatalf("error = %v, want home kv store unavailable", errCandidates)
 	}
 }
