@@ -51,6 +51,8 @@ env:
     internal/logging/home_app_log_forwarder.go
     internal/logging/home_app_log_forwarder_test.go
     internal/logging/home_rebalance_log_test.go
+    internal/pluginhost/home_executor_lifecycle_test.go
+    internal/pluginhost/home_executor_test.go
     internal/runtime/executor/helps/cache_helpers_test.go
     internal/runtime/executor/helps/home_refresh_test.go
     sdk/cliproxy/auth/home_in_flight_publisher.go
