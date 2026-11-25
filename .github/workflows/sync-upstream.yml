@@ -2,8 +2,9 @@ name: Sync Upstream
 
 # 定时检查官方 router-for-me/CLIProxyAPI 的最新稳定版本，
 # 合并到本仓库 main 后打同名 tag，由 release.yaml 构建发布。
-# 本仓库已移除的模块目录（PRUNED_MODULES）在合并后会被自动裁剪，
-# 避免上游持续修改这些文件导致 modify/delete 冲突。
+# 本仓库已移除的模块目录（PRUNED_MODULES）和散落在模块外的已删文件
+# （PRUNED_FILES）在合并后会被自动裁剪，避免上游持续修改这些文件导致
+# modify/delete 冲突。
 # 其余冲突、或裁剪后编译不通过时，中止本次同步并创建 issue，
 # 同时按需发送 Telegram 通知，不自动发布。
 # Telegram 通知需要配置仓库 secrets：TELEGRAM_BOT_TOKEN、TELEGRAM_CHAT_ID；
@@ -28,6 +29,41 @@ env:
   # Module trees this repository has intentionally removed. Upstream keeps
   # modifying them, so every sync would otherwise hit modify/delete conflicts.
   PRUNED_MODULES: internal/tui internal/home internal/homeplugins internal/pluginstore sdk/pluginstore
+  # Individual files deleted by the same pruning commit (558a4415) that live
+  # OUTSIDE those module trees. They are mostly the home/plugin plumbing that
+  # spanned packages: redis queue protocol, plugin store handlers, the
+  # service_home_* family, log forwarders, and tests for all of it.
+  #
+  # Without this list each one is a latent modify/delete conflict: the moment
+  # upstream touches any of them, git stops the merge and a human has to work
+  # out whether the change is "pruned-module plumbing" or real upstream work.
+  # Listing them makes the pruning self-healing — upstream resurrects a file,
+  # the next sync removes it again, exactly like PRUNED_MODULES.
+  PRUNED_FILES: >-
+    internal/api/handlers/management/plugin_store.go
+    internal/api/handlers/management/plugin_store_release.go
+    internal/api/handlers/management/plugin_store_release_test.go
+    internal/api/handlers/management/plugin_store_test.go
+    internal/api/home_models_empty_test.go
+    internal/api/redis_queue_protocol.go
+    internal/api/redis_queue_protocol_integration_test.go
+    internal/api/server_home_tool_search_test.go
+    internal/logging/home_app_log_forwarder.go
+    internal/logging/home_app_log_forwarder_test.go
+    internal/logging/home_rebalance_log_test.go
+    internal/runtime/executor/helps/cache_helpers_test.go
+    internal/runtime/executor/helps/home_refresh_test.go
+    sdk/cliproxy/auth/home_in_flight_publisher.go
+    sdk/cliproxy/auth/home_in_flight_publisher_test.go
+    sdk/cliproxy/home_plugins.go
+    sdk/cliproxy/home_plugins_test.go
+    sdk/cliproxy/service_home.go
+    sdk/cliproxy/service_home_cancellation_test.go
+    sdk/cliproxy/service_home_rebalance_finalization_test.go
+    sdk/cliproxy/service_home_rebalance_release_test.go
+    sdk/cliproxy/service_home_rebalance_test.go
+    sdk/cliproxy/service_home_retry.go
+    sdk/cliproxy/service_home_retry_test.go
 
 jobs:
   sync:
@@ -142,7 +178,7 @@ jobs:
               echo
               echo "同步 \`${TAG}\` 已中止，未推送任何改动。"
               echo
-              echo "已自动裁剪的已移除模块：${pruned:-无}"
+              echo "已自动裁剪的已移除模块/文件：${pruned:-无}"
               echo
               printf '%s\n' "$details"
               echo
@@ -211,6 +247,16 @@ jobs:
               pruned="${pruned}${module} "
             fi
           done
+          # Files deleted by the pruning commit that sit outside those trees.
+          # `git rm -r` works on a single path too; the ls-files guard is what
+          # makes this idempotent — a path upstream no longer ships is simply
+          # skipped instead of failing the whole step.
+          for f in ${PRUNED_FILES}; do
+            if [[ -n "$(git ls-files -- "$f")" ]]; then
+              git rm -r -q --force "$f"
+              pruned="${pruned}${f} "
+            fi
+          done
 
           remaining="$(git diff --name-only --diff-filter=U)"
           if [[ -n "$remaining" ]]; then
@@ -249,7 +295,7 @@ jobs:
           git commit --no-edit
           echo "合并 ${TAG} 成功" >> "$GITHUB_STEP_SUMMARY"
           if [[ -n "$pruned" ]]; then
-            echo "已自动裁剪已移除模块：${pruned}" >> "$GITHUB_STEP_SUMMARY"
+            echo "已自动裁剪已移除模块/文件：${pruned}" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: 推送 main 并打 tag
