@@ -345,6 +345,7 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
 	ctx = coreusage.CaptureIdentity(ctx)
 	ctx = contextWithInFlightScope(ctx, scope)
 	ctx = withRequestRefusedAuths(ctx)
+	ctx = withAntigravityAttemptedModels(ctx)
 	normalized := m.normalizeProviders(providers)
 	if len(normalized) == 0 {
 		return cliproxyexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
@@ -526,6 +527,7 @@ func (m *Manager) ExecuteCount(ctx context.Context, providers []string, req clip
 	ctx = coreusage.CaptureIdentity(ctx)
 	ctx = contextWithInFlightScope(ctx, scope)
 	ctx = withRequestRefusedAuths(ctx)
+	ctx = withAntigravityAttemptedModels(ctx)
 	normalized := m.normalizeProviders(providers)
 	if len(normalized) == 0 {
 		return cliproxyexecutor.Response{}, &Error{Code: "provider_not_found", Message: "no provider supplied"}
@@ -607,6 +609,7 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
 	ctx = coreusage.CaptureIdentity(ctx)
 	ctx = contextWithInFlightScope(ctx, scope)
 	ctx = withRequestRefusedAuths(ctx)
+	ctx = withAntigravityAttemptedModels(ctx)
 	if m.HomeEnabled() {
 		if unlockSession := m.lockHomeWebsocketSession(ctx, opts); unlockSession != nil {
 			defer unlockSession()
@@ -1448,6 +1451,7 @@ func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req 
 			}
 			result := Result{AuthID: auth.ID, Provider: provider, Model: resultModel, RouteModel: routeModel, Success: errExec == nil, CompletedResponse: errExec == nil && !resp.Incomplete && isCompletedExecutionPayload(resp.Payload), Options: execOpts, AccessToken: authAccessTokenForRequest(execCtx, auth, execOpts.Headers), RefreshToken: authRefreshToken(auth), CredentialVersion: auth.CredentialVersion, RegistrationEpoch: auth.RegistrationEpoch, ExecutionSeq: executionSeq}
 			if errExec != nil {
+				recordAntigravityAttemptedModelFromAttempt(ctx, execCtx, provider, auth.ID, resultModel, errExec)
 				result.Error = resultErrorFromError(errExec)
 				if ra := retryAfterFromError(errExec); ra != nil {
 					result.RetryAfter = ra
@@ -1750,6 +1754,7 @@ func (m *Manager) executeCountMixedOnce(ctx context.Context, providers []string,
 			}
 			result := Result{AuthID: auth.ID, Provider: provider, Model: resultModel, RouteModel: routeModel, Success: errExec == nil, Options: execOpts, SkipQuotaObservation: true, AccessToken: authAccessTokenForRequest(execCtx, auth, execOpts.Headers), RefreshToken: authRefreshToken(auth), CredentialVersion: auth.CredentialVersion, RegistrationEpoch: auth.RegistrationEpoch, ExecutionSeq: executionSeq}
 			if errExec != nil {
+				recordAntigravityAttemptedModelFromAttempt(ctx, execCtx, provider, auth.ID, resultModel, errExec)
 				result.Error = resultErrorFromError(errExec)
 				if ra := retryAfterFromError(errExec); ra != nil {
 					result.RetryAfter = ra
@@ -3993,13 +3998,14 @@ func (m *Manager) recordVerifyFailure(execCtx context.Context, auth *Auth, provi
 }
 
 func (m *Manager) completeVerifyInferenceSuccess(execCtx context.Context, auth *Auth, provider, stateModel, routeModel string, opts cliproxyexecutor.Options, accessToken string, credVersion, regEpoch, executionSeq uint64) (*Auth, error) {
-	m.MarkResult(execCtx, Result{
+	appliedVerification := m.markResult(execCtx, Result{
 		AuthID:            auth.ID,
 		Provider:          provider,
 		Model:             stateModel,
 		RouteModel:        routeModel,
 		Success:           true,
 		CompletedResponse: true,
+		OperatorVerify:    true,
 		Options:           opts,
 		AccessToken:       accessToken,
 		RefreshToken:      authRefreshToken(auth),
@@ -4011,8 +4017,15 @@ func (m *Manager) completeVerifyInferenceSuccess(execCtx context.Context, auth *
 	if !okUpdated || updated == nil {
 		return nil, verifyCredentialRemovedError()
 	}
-	if updated.CredentialVersion != credVersion || updated.RegistrationEpoch != regEpoch || !updated.InferenceVerified {
+	if updated.CredentialVersion != credVersion || updated.RegistrationEpoch != regEpoch {
 		return updated, verifyCredentialSupersededError()
+	}
+	if !appliedVerification || !updated.InferenceVerified {
+		return updated, &Error{
+			Code:       "verification_not_applied",
+			Message:    "upstream completed the verification request, but the credential is still cooling down or disabled; it was not marked verified",
+			HTTPStatus: http.StatusConflict,
+		}
 	}
 	return updated, nil
 }
@@ -4039,10 +4052,14 @@ func (m *Manager) VerifyInference(ctx context.Context, id, model string) (*Auth,
 		return auth, &Error{Code: "sign_in_required", Message: "credential requires sign-in before inference verification", HTTPStatus: http.StatusConflict}
 	}
 	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+	executorKey := executorKeyFromAuth(auth)
+	if executorKey == "" {
+		executorKey = provider
+	}
 	m.mu.RLock()
-	executor := m.executors[provider]
+	executor, okExec := m.executorLocked(executorKey)
 	m.mu.RUnlock()
-	if executor == nil {
+	if !okExec || executor == nil {
 		return auth, &Error{Code: "executor_not_found", Message: "executor not registered for provider", HTTPStatus: http.StatusBadRequest}
 	}
 

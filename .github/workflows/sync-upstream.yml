@@ -53,6 +53,11 @@ env:
     internal/logging/home_rebalance_log_test.go
     internal/pluginhost/home_executor_lifecycle_test.go
     internal/pluginhost/home_executor_test.go
+    internal/pluginhost/home_local_executor_before_auth_test.go
+    internal/pluginhost/home_local_executor_credentials_test.go
+    internal/pluginhost/home_local_executor_recursion_test.go
+    internal/pluginhost/home_local_executor_test.go
+    internal/runtime/executor/antigravity_executor_issue8168_test.go
     internal/runtime/executor/helps/cache_helpers_test.go
     internal/runtime/executor/helps/home_refresh_test.go
     sdk/cliproxy/auth/home_in_flight_publisher.go
