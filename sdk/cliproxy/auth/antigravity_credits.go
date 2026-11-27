@@ -129,8 +129,12 @@ func setAntigravityCreditsHint(authID string, hint AntigravityCreditsHint, scope
 		hint.UpdatedAt = time.Now()
 	}
 	if _, kvMode, _ := kvstore.CurrentKVClient(); kvMode {
-		kvstore.KVSetJSONBestEffort(context.Background(), antigravityCreditsHintKey(authID, scope), hint, 30*time.Minute)
-		return true
+		// Return the persistence result rather than a blanket true: callers
+		// (antigravity_executor_credits.go publish closure) skip the balance
+		// write when the hint fails to persist, so that a concurrent Home KV
+		// cleanup can never pair an older "unavailable" hint with a newer
+		// balance. Returning true unconditionally reintroduces that race.
+		return kvstore.KVSetJSONBestEffort(context.Background(), antigravityCreditsHintKey(authID, scope), hint, 30*time.Minute)
 	}
 	antigravityCreditsHintByAuth.Store(newAntigravityCreditsHintCacheScope(authID, scope), hint)
 	return true
