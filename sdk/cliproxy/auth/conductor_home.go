@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -406,16 +407,30 @@ func repeatedHomeAuthError() *Error {
 }
 
 type homeAuthDispatchResponse struct {
-	SelectionID   string                 `json:"selection_id,omitempty"`
-	Model         string                 `json:"model"`
-	Provider      string                 `json:"provider"`
-	AuthIndex     string                 `json:"auth_index"`
-	UserAPIKey    string                 `json:"user_api_key"`
-	RequestRetry  *int                   `json:"request_retry,omitempty"`
-	ForceMapping  bool                   `json:"force_mapping"`
-	OriginalAlias string                 `json:"original_alias"`
-	ModelInfo     *homeDispatchModelInfo `json:"model_info,omitempty"`
-	Auth          Auth                   `json:"auth"`
+	SelectionID    string                 `json:"selection_id,omitempty"`
+	Model          string                 `json:"model"`
+	Provider       string                 `json:"provider"`
+	ExecutorPlugin string                 `json:"executor_plugin,omitempty"`
+	AuthIndex      string                 `json:"auth_index"`
+	UserAPIKey     string                 `json:"user_api_key"`
+	RequestRetry   *int                   `json:"request_retry,omitempty"`
+	ForceMapping   bool                   `json:"force_mapping"`
+	OriginalAlias  string                 `json:"original_alias"`
+	ModelInfo      *homeDispatchModelInfo `json:"model_info,omitempty"`
+	Auth           Auth                   `json:"auth"`
+}
+
+// HomePluginExecutorResolver exposes the live plugin executors that accept Home credentials.
+type HomePluginExecutorResolver interface {
+	HomeExecutorPlugins() map[string][]string
+	ResolveHomePluginExecutor(pluginID, authProvider string) (ProviderExecutor, error)
+}
+
+// SetHomePluginExecutorResolver installs the plugin host for Home dispatch.
+func (m *Manager) SetHomePluginExecutorResolver(resolver HomePluginExecutorResolver) {
+	m.mu.Lock()
+	m.homePluginExecutors = resolver
+	m.mu.Unlock()
 }
 
 type homeDispatchModelInfo struct {
@@ -1164,6 +1179,13 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
 		ExecutionSessionID: homeExecutionSessionIDFromMetadata(opts.Metadata),
 		RequestedModel:     stringMetadataValue(opts.Metadata, cliproxyexecutor.RequestedModelMetadataKey),
 	})
+	m.mu.RLock()
+	pluginExecutors := m.homePluginExecutors
+	m.mu.RUnlock()
+	// Upstream publishes the ready executor plugins through the Home context so
+	// internal/home can attach them to the RPOP payload. That module is pruned
+	// here, so there is no reader left; the plugin resolvers below are the only
+	// consumers of pluginExecutors in this fork.
 	credentialPolicy := credentialPolicyFromContext(ctx)
 	var raw []byte
 	var errRPop error
@@ -1322,11 +1344,31 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
 		auth.EnsureIndex()
 	}
 
-	executor, okExecutor := m.Executor(executorKey)
+	authExecutor, okExecutor := m.Executor(executorKey)
 	if !okExecutor && auth.Attributes != nil && strings.TrimSpace(auth.Attributes["base_url"]) != "" {
-		executor, okExecutor = m.Executor("openai-compatibility")
+		authExecutor, okExecutor = m.Executor("openai-compatibility")
 	}
-	if !okExecutor {
+	executor := authExecutor
+	executorPlugin := strings.TrimSpace(dispatch.ExecutorPlugin)
+	if executorPlugin != "" {
+		if isAuthDisabled(&auth) || strings.TrimSpace(dispatch.Model) == "" {
+			endScope()
+			return nil, &Error{Code: "invalid_auth", Message: "home plugin dispatch requires an enabled auth and an upstream model", HTTPStatus: http.StatusBadGateway}
+		}
+		var errPlugin error
+		if pluginExecutors == nil {
+			errPlugin = fmt.Errorf("plugin executor %q is unavailable: plugin host is not configured", executorPlugin)
+		} else {
+			executor, errPlugin = pluginExecutors.ResolveHomePluginExecutor(executorPlugin, logicalProvider)
+			if errPlugin == nil && executor == nil {
+				errPlugin = fmt.Errorf("plugin executor %q is unavailable", executorPlugin)
+			}
+		}
+		if errPlugin != nil {
+			endScope()
+			return nil, &Error{Code: ErrorCodeHomeExecutorPluginUnavailable, Message: errPlugin.Error(), HTTPStatus: http.StatusServiceUnavailable}
+		}
+	} else if !okExecutor {
 		endScope()
 		return nil, &Error{Code: "executor_not_found", Message: "executor not registered", HTTPStatus: http.StatusBadGateway}
 	}
@@ -1351,6 +1393,8 @@ func (m *Manager) pickHomeDispatchSelection(ctx context.Context, model string, o
 		endScope()
 		return nil, &Error{Code: "home_unavailable", Message: "home execution registry unavailable", Retryable: true, HTTPStatus: http.StatusServiceUnavailable}
 	}
+	selection.ExecutorPlugin = executorPlugin
+	selection.authExecutor = authExecutor
 	selection.modelInfo = dispatch.ModelInfo.registryModelInfo()
 	if dispatch.ModelInfo != nil {
 		selection.configurationUpdateSupport = dispatch.ModelInfo.SupportConfigurationUpdate
